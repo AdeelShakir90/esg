@@ -161,10 +161,10 @@ export function ProcessingView() {
       >
         <CardHeader className="space-y-2 border-b border-border/50 bg-gradient-to-b from-secondary/30 to-transparent pb-8 text-center">
           <h1 className="font-heading text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
-            Analyzing your documents with AI
+            Preparing your ESG dashboard
           </h1>
           <CardDescription className="text-base text-muted-foreground">
-            This may take a few seconds...
+            Generating reports, KPI categories, and exports...
           </CardDescription>
         </CardHeader>
 
