@@ -1,5 +1,4 @@
 import Image from "next/image";
-import { UserRound } from "lucide-react";
 
 import { SectionTitle, Subtitle } from "@/components/primitives/typography";
 import { design } from "@/lib/design-tokens";
@@ -9,32 +8,26 @@ type Founder = {
   name: string;
   role: string;
   expertise?: string;
-  initials: string;
-  imageSrc: string | null;
+  imageSrc: string;
+  imagePosition?: string;
 };
 
 const founders: Founder[] = [
   {
     name: "Alex",
     role: "Co-Founder & CEO",
-    initials: "A",
-    // Replace with "/team/alex.jpg" after adding the photo to public/team/.
-    imageSrc: null,
-  },
-  {
-    name: "Susanne",
-    role: "Co-Founder",
-    initials: "S",
-    // Replace with "/team/susanne.jpg" after adding the photo to public/team/.
-    imageSrc: null,
+    imageSrc: "/team/alex.jpg",
   },
   {
     name: "Muhammad Adeel Shakir",
     role: "Co-Founder & CTO",
     expertise: "Data Science · Software Engineering · AI",
-    initials: "MAS",
-    // Replace with "/team/muhammad-adeel-shakir.jpg" after adding the photo to public/team/.
-    imageSrc: null,
+    imageSrc: "/team/muhammad-adeel-shakir.jpg",
+  },
+  {
+    name: "Susanne",
+    role: "Co-Founder",
+    imageSrc: "/team/susanne.jpg",
   },
 ];
 
@@ -43,7 +36,7 @@ export function TeamSection() {
     <section
       id="team"
       className={cn(
-        "relative scroll-mt-20 overflow-hidden border-t border-border/40 bg-background",
+        "relative scroll-mt-24 overflow-hidden border-t border-border/40 bg-background sm:scroll-mt-28",
         design.section.y
       )}
     >
@@ -55,18 +48,20 @@ export function TeamSection() {
             "radial-gradient(ellipse 55% 36% at 50% 4%, rgb(31 122 99 / 0.12), transparent 68%), radial-gradient(ellipse 34% 28% at 82% 22%, rgb(74 222 155 / 0.08), transparent 72%)",
         }}
       />
-      <div
-        className="pointer-events-none absolute left-1/2 top-12 h-24 w-[min(44rem,82vw)] -translate-x-1/2 rounded-full border border-primary/10"
-        aria-hidden
-      />
       <div className={cn(design.page.marketing, "relative text-center")}>
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">
-          OUR TEAM
-        </p>
-        <SectionTitle className="mx-auto mt-3 max-w-3xl">
-          Built by a team combining business, ESG &amp; technology.
-        </SectionTitle>
-        <Subtitle className="mx-auto mt-4 max-w-2xl">
+        <div className="relative mx-auto max-w-4xl px-6 py-8 sm:px-10 sm:py-10">
+          <div
+            className="pointer-events-none absolute inset-0 rounded-[50%] border border-primary/10 bg-background/20"
+            aria-hidden
+          />
+          <p className="relative text-xs font-semibold uppercase tracking-[0.2em] text-primary">
+            OUR TEAM
+          </p>
+          <SectionTitle className="relative mx-auto mt-4 max-w-3xl">
+            Built by a team combining business, ESG &amp; technology.
+          </SectionTitle>
+        </div>
+        <Subtitle className="mx-auto mt-6 max-w-2xl">
           We bring together complementary expertise to make ESG data collection
           and reporting simpler for SMEs.
         </Subtitle>
@@ -75,32 +70,17 @@ export function TeamSection() {
           {founders.map((founder) => (
             <li
               key={founder.name}
-              className="group flex min-w-0 flex-col overflow-hidden rounded-2xl border border-border/60 bg-card shadow-premium transition-[border-color,box-shadow,transform] duration-300 ease-out hover:-translate-y-0.5 hover:border-primary/20 hover:shadow-premium-hover motion-reduce:transform-none"
+              className="group flex h-full min-w-0 flex-col overflow-hidden rounded-2xl border border-border/60 bg-card shadow-premium transition-[border-color,box-shadow,transform] duration-300 ease-out hover:-translate-y-0.5 hover:border-primary/20 hover:shadow-premium-hover motion-reduce:transform-none"
             >
               <div className="relative aspect-[4/3] overflow-hidden bg-gradient-to-br from-secondary via-background to-accent">
-                {founder.imageSrc ? (
-                  <Image
-                    src={founder.imageSrc}
-                    alt={`${founder.name} portrait`}
-                    fill
-                    sizes="(min-width: 768px) 320px, 100vw"
-                    className="object-cover"
-                  />
-                ) : (
-                  <div className="flex h-full items-center justify-center">
-                    <div className="absolute inset-5 rounded-2xl border border-primary/10 bg-card/35 shadow-inner" />
-                    <div className="absolute -right-8 top-8 size-32 rounded-full bg-primary/10 blur-2xl" />
-                    <div className="absolute -bottom-10 left-8 size-36 rounded-full bg-emerald-300/15 blur-2xl" />
-                    <div className="relative flex flex-col items-center gap-3">
-                      <span className="flex size-20 items-center justify-center rounded-2xl border border-primary/15 bg-background/80 text-primary shadow-soft backdrop-blur-sm">
-                        <UserRound className="size-9" strokeWidth={1.4} aria-hidden />
-                      </span>
-                      <span className="text-xs font-semibold uppercase tracking-[0.18em] text-primary/75">
-                        {founder.initials}
-                      </span>
-                    </div>
-                  </div>
-                )}
+                <Image
+                  src={founder.imageSrc}
+                  alt={`${founder.name} portrait`}
+                  fill
+                  sizes="(min-width: 1024px) 320px, (min-width: 768px) 30vw, calc(100vw - 3rem)"
+                  className="object-cover"
+                  style={{ objectPosition: founder.imagePosition ?? "center" }}
+                />
               </div>
               <div className="flex flex-1 flex-col p-6">
                 <div className="flex items-start justify-between gap-4">
