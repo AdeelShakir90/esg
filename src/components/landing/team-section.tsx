@@ -14,19 +14,21 @@ type Founder = {
 
 const founders: Founder[] = [
   {
-    name: "Alex",
+    name: "Alexander Vollmann",
     role: "Co-Founder & CEO",
+    expertise: "WU Vienna · Business Administration & Business Law",
     imageSrc: "/team/alex.jpg",
   },
   {
     name: "Muhammad Adeel Shakir",
     role: "Co-Founder & CTO",
-    expertise: "Data Science · Software Engineering · AI",
+    expertise: "TU Vienna · Data Science",
     imageSrc: "/team/muhammad-adeel-shakir.jpg",
   },
   {
-    name: "Susanne",
-    role: "Co-Founder",
+    name: "Susanne Edelbrunner",
+    role: "Co-Founder & Head of Environmental Methodology",
+    expertise: "BOKU Vienna · Environmental Management",
     imageSrc: "/team/susanne.jpg",
   },
 ];
