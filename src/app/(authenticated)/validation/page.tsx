@@ -114,9 +114,9 @@ const visibleFiles =
       <header className="sticky top-0 z-20 border-b bg-background/80 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-2">
-            <img src="/logo.png" alt="logo" className="h-8 w-8 rounded-md" />
+            <img src="/logo.png" alt="envario logo" className="h-8 w-8 rounded-md" />
             <span className="text-lg font-semibold tracking-tight">
-              ESG<span className="text-primary">simplify</span>
+              en<span className="text-primary">vario</span>
             </span>
           </div>
 

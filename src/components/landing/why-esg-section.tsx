@@ -32,7 +32,7 @@ export function WhyEsgSection() {
       className={cn("scroll-mt-20 bg-muted/25", design.section.y)}
     >
       <div className={cn(design.page.marketing, "text-center")}>
-        <SectionTitle>Why ESGsimplify</SectionTitle>
+        <SectionTitle>Why envario</SectionTitle>
         <Subtitle className="mx-auto mt-4 max-w-2xl">
           Built for operators who need outcomes, not another complex enterprise tool.
         </Subtitle>

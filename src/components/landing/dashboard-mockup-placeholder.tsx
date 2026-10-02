@@ -17,7 +17,7 @@ export function DashboardMockupPlaceholder() {
           <span className="size-2.5 rounded-full bg-amber-400/80" />
           <span className="size-2.5 rounded-full bg-primary/50" />
           <span className="ml-3 flex-1 truncate text-center text-[11px] font-medium text-muted-foreground">
-            www.esgsimplify.at · Dashboard
+            envario · Dashboard
           </span>
         </div>
         <div className="space-y-4 bg-gradient-to-b from-secondary/20 to-background p-4 sm:p-5">

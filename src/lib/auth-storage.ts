@@ -1,5 +1,5 @@
 const USER_KEY = "user";
-const PROFILE_KEY = "esgsimplified_profile";
+const PROFILE_KEY = "envario_profile";
 
 export function getStoredUserEmail(): string | null {
   if (typeof window === "undefined") return null;
