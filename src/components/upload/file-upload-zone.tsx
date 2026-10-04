@@ -3,7 +3,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FileText, Loader2, Sparkles, Trash2, UploadCloud } from "lucide-react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  FileText,
+  Loader2,
+  Sparkles,
+  Trash2,
+  UploadCloud,
+} from "lucide-react";
 
 import { ContentCard } from "@/components/primitives/content-card";
 import { Button } from "@/components/ui/button";
@@ -15,94 +23,192 @@ import {
   CardFooter,
   CardHeader,
 } from "@/components/ui/card";
+import {
+  formatFileSize,
+  MAX_DOCUMENT_SIZE_BYTES,
+  type DocumentRecord,
+} from "@/lib/documents";
 import { design } from "@/lib/design-tokens";
 import { cn } from "@/lib/utils";
 
-type FileStatus = "processing" | "ready";
+type UploadStatus = "uploading" | "success" | "error";
 
-type MockFile = {
+type UploadItem = {
   id: string;
   name: string;
-  size: string;
-  status: FileStatus;
+  size: number;
+  status: UploadStatus;
+  error?: string;
+  document?: DocumentRecord;
 };
 
-let mockId = 0;
-
-function nextMockFile(): Omit<MockFile, "id" | "status"> {
-  const pool = [
-    { name: "Nachhaltigkeitsbericht_Entwurf.pdf", size: "2.4 MB" },
-    { name: "Energie_2025_Q1-Q2.xlsx", size: "892 KB" },
-    { name: "Emissionen_Scope1_2.csv", size: "156 KB" },
-    { name: "HR_Policies_de.pdf", size: "1.1 MB" },
-    { name: "Lieferanten_Übersicht.xlsx", size: "445 KB" },
-  ] as const;
-  const pick = pool[mockId % pool.length];
-  mockId += 1;
-  return { name: pick.name, size: pick.size };
+function getClientValidationError(file: File) {
+  if (file.type.toLowerCase() !== "application/pdf" || !/\.pdf$/i.test(file.name)) {
+    return "Only PDF files are accepted.";
+  }
+  if (file.size === 0) return "The selected PDF is empty.";
+  if (file.size > MAX_DOCUMENT_SIZE_BYTES) return "PDF files must be 5 MB or smaller.";
+  return null;
 }
 
-function StatusBadge({ status }: { status: FileStatus }) {
-  if (status === "processing") {
+function UploadStatusBadge({ status }: { status: UploadStatus }) {
+  if (status === "uploading") {
     return (
       <Badge
         variant="outline"
         className="gap-1 border-amber-200/90 bg-amber-50/90 font-medium text-amber-900"
       >
         <Loader2 className="size-3 animate-spin" aria-hidden />
-        Processing
+        Uploading
       </Badge>
     );
   }
+
+  if (status === "error") {
+    return (
+      <Badge variant="destructive" className="gap-1 font-medium">
+        <AlertCircle className="size-3" aria-hidden />
+        Failed
+      </Badge>
+    );
+  }
+
   return (
     <Badge
       variant="secondary"
-      className="border border-primary/15 bg-primary/10 font-medium text-primary"
+      className="gap-1 border border-primary/15 bg-primary/10 font-medium text-primary"
     >
-      Ready
+      <CheckCircle2 className="size-3" aria-hidden />
+      Uploaded
+    </Badge>
+  );
+}
+
+function StoredStatusBadge({ status }: { status: string }) {
+  return (
+    <Badge
+      variant="secondary"
+      className="border border-primary/15 bg-primary/10 font-medium capitalize text-primary"
+    >
+      {status}
     </Badge>
   );
 }
 
 export function FileUploadZone() {
   const router = useRouter();
+  const inputRef = useRef<HTMLInputElement>(null);
   const [drag, setDrag] = useState(false);
-  const [files, setFiles] = useState<MockFile[]>([]);
-  const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const [uploads, setUploads] = useState<UploadItem[]>([]);
+  const [documents, setDocuments] = useState<DocumentRecord[]>([]);
+  const [documentsLoading, setDocumentsLoading] = useState(true);
+  const [documentsError, setDocumentsError] = useState<string | null>(null);
 
-  const addMockFiles = useCallback(() => {
-    const base = nextMockFile();
-    const id = `f-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-    const entry: MockFile = {
-      id,
-      ...base,
-      status: "processing",
-    };
-    setFiles((prev) => [...prev, entry]);
+  const loadDocuments = useCallback(async () => {
+    setDocumentsLoading(true);
+    setDocumentsError(null);
 
-    const t = setTimeout(() => {
-      setFiles((prev) =>
-        prev.map((f) => (f.id === id ? { ...f, status: "ready" as const } : f))
+    try {
+      const response = await fetch("/api/documents", { cache: "no-store" });
+      const payload = (await response.json()) as {
+        documents?: DocumentRecord[];
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Unable to load documents.");
+      }
+
+      setDocuments(payload.documents ?? []);
+    } catch (error) {
+      setDocumentsError(
+        error instanceof Error ? error.message : "Unable to load documents."
       );
-      timersRef.current.delete(id);
-    }, 1600);
-    timersRef.current.set(id, t);
+    } finally {
+      setDocumentsLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    const pendingTimers = timersRef.current;
-    return () => {
-      pendingTimers.forEach((t) => clearTimeout(t));
-      pendingTimers.clear();
+    void loadDocuments();
+  }, [loadDocuments]);
+
+  const uploadFile = useCallback(async (file: File) => {
+    const id = crypto.randomUUID();
+    const validationError = getClientValidationError(file);
+    const entry: UploadItem = {
+      id,
+      name: file.name,
+      size: file.size,
+      status: validationError ? "error" : "uploading",
+      error: validationError ?? undefined,
     };
+
+    setUploads((current) => [entry, ...current]);
+    if (validationError) return;
+
+    const formData = new FormData();
+    formData.set("file", file);
+
+    try {
+      const response = await fetch("/api/documents", {
+        method: "POST",
+        body: formData,
+      });
+      const payload = (await response.json()) as {
+        document?: DocumentRecord;
+        error?: string;
+      };
+
+      if (!response.ok || !payload.document) {
+        throw new Error(payload.error ?? "The PDF could not be uploaded.");
+      }
+
+      setUploads((current) =>
+        current.map((item) =>
+          item.id === id
+            ? { ...item, status: "success", document: payload.document }
+            : item
+        )
+      );
+      setDocuments((current) => [
+        payload.document as DocumentRecord,
+        ...current.filter((document) => document.id !== payload.document?.id),
+      ]);
+    } catch (error) {
+      setUploads((current) =>
+        current.map((item) =>
+          item.id === id
+            ? {
+                ...item,
+                status: "error",
+                error:
+                  error instanceof Error ? error.message : "The PDF could not be uploaded.",
+              }
+            : item
+        )
+      );
+    }
   }, []);
 
-  const removeFile = (id: string) => {
-    const t = timersRef.current.get(id);
-    if (t) clearTimeout(t);
-    timersRef.current.delete(id);
-    setFiles((prev) => prev.filter((f) => f.id !== id));
-  };
+  const uploadFiles = useCallback(
+    async (selectedFiles: File[]) => {
+      for (const file of selectedFiles) {
+        await uploadFile(file);
+      }
+    },
+    [uploadFile]
+  );
+
+  const successfulUploads = uploads.filter(
+    (upload) => upload.status === "success" && upload.document
+  );
+  const successfulDocumentIds = new Set(
+    successfulUploads.map((upload) => upload.document?.id)
+  );
+  const storedDocuments = documents.filter(
+    (document) => !successfulDocumentIds.has(document.id)
+  );
 
   return (
     <div className={design.page.centeredMd}>
@@ -112,36 +218,51 @@ export function FileUploadZone() {
             Upload your ESG documents
           </h1>
           <CardDescription className="text-base">
-            Drag files into the area below or click to add demo files. Nothing is sent
-            to a server in this build.
+            Upload PDF documents securely for your ESG workspace. Each file can be up
+            to 5 MB.
           </CardDescription>
         </CardHeader>
 
         <CardContent className="flex flex-col gap-8 pt-8">
+          <input
+            ref={inputRef}
+            type="file"
+            accept="application/pdf,.pdf"
+            className="sr-only"
+            onChange={(event) => {
+              const selectedFiles = Array.from(event.target.files ?? []);
+              event.target.value = "";
+              void uploadFiles(selectedFiles);
+            }}
+          />
           <div
             role="button"
             tabIndex={0}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                addMockFiles();
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                inputRef.current?.click();
               }
             }}
-            onDragEnter={(e) => {
-              e.preventDefault();
+            onDragEnter={(event) => {
+              event.preventDefault();
               setDrag(true);
             }}
-            onDragOver={(e) => {
-              e.preventDefault();
+            onDragOver={(event) => {
+              event.preventDefault();
               setDrag(true);
             }}
-            onDragLeave={() => setDrag(false)}
-            onDrop={(e) => {
-              e.preventDefault();
+            onDragLeave={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                setDrag(false);
+              }
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
               setDrag(false);
-              addMockFiles();
+              void uploadFiles(Array.from(event.dataTransfer.files));
             }}
-            onClick={addMockFiles}
+            onClick={() => inputRef.current?.click()}
             className={cn(
               "flex min-h-[min(22rem,55vh)] cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 py-14 text-center transition-[border-color,background-color,box-shadow,transform] duration-300 ease-out motion-safe:hover:-translate-y-0.5 sm:min-h-[20rem] sm:py-16",
               drag
@@ -164,53 +285,88 @@ export function FileUploadZone() {
               or drag and drop your files here
             </p>
             <p className="mt-6 text-xs font-medium uppercase tracking-wide text-primary/80">
-              Supported formats: PDF, Excel, CSV
+              PDF only · Maximum 5 MB
             </p>
           </div>
 
-          {files.length > 0 && (
+          {uploads.length > 0 && (
             <div className="space-y-3">
-              <h3 className="text-sm font-semibold text-foreground">
-                Uploaded files
-              </h3>
-              <ul className="flex flex-col gap-2" aria-label="Uploaded files">
-                {files.map((f) => (
+              <h3 className="text-sm font-semibold text-foreground">Current uploads</h3>
+              <ul className="flex flex-col gap-2" aria-label="Current uploads">
+                {uploads.map((upload) => (
                   <li
-                    key={f.id}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-border/50 bg-card px-4 py-3.5 shadow-sm transition-[border-color,box-shadow] duration-200 ease-out hover:border-primary/25 hover:shadow-soft"
+                    key={upload.id}
+                    className="rounded-xl border border-border/50 bg-card px-4 py-3.5 shadow-sm"
                   >
-                    <div className="flex min-w-0 flex-1 items-center gap-3">
-                      <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                        <FileText className="size-5" strokeWidth={1.5} aria-hidden />
-                      </span>
-                      <div className="min-w-0 text-left">
-                        <p className="truncate font-medium text-foreground">
-                          {f.name}
-                        </p>
-                        <p className="text-xs text-muted-foreground">{f.size}</p>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex min-w-0 flex-1 items-center gap-3">
+                        <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                          <FileText className="size-5" strokeWidth={1.5} aria-hidden />
+                        </span>
+                        <div className="min-w-0 text-left">
+                          <p className="truncate font-medium text-foreground">
+                            {upload.name}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatFileSize(upload.size)}
+                          </p>
+                        </div>
                       </div>
+                      <UploadStatusBadge status={upload.status} />
                     </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                      <StatusBadge status={f.status} />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        className="text-muted-foreground hover:text-destructive"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeFile(f.id);
-                        }}
-                        aria-label={`Remove ${f.name}`}
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
-                    </div>
+                    {upload.error && (
+                      <p className="mt-2 pl-[3.25rem] text-sm text-destructive" role="alert">
+                        {upload.error}
+                      </p>
+                    )}
                   </li>
                 ))}
               </ul>
             </div>
           )}
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm font-semibold text-foreground">Stored documents</h3>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => void loadDocuments()}
+                disabled={documentsLoading}
+              >
+                {documentsLoading && <Loader2 className="size-4 animate-spin" aria-hidden />}
+                Refresh
+              </Button>
+            </div>
+
+            {documentsError && (
+              <p
+                className="rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+                role="alert"
+              >
+                {documentsError}
+              </p>
+            )}
+
+            {!documentsLoading && !documentsError && documents.length === 0 && (
+              <p className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+                No documents have been uploaded yet.
+              </p>
+            )}
+
+            {(successfulUploads.length > 0 || storedDocuments.length > 0) && (
+              <ul className="flex flex-col gap-2" aria-label="Stored documents">
+                {successfulUploads.map((upload) => {
+                  const document = upload.document as DocumentRecord;
+                  return <StoredDocument key={document.id} document={document} />;
+                })}
+                {storedDocuments.map((document) => (
+                  <StoredDocument key={document.id} document={document} />
+                ))}
+              </ul>
+            )}
+          </div>
 
           <div
             className="flex gap-3 rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/[0.07] to-secondary/40 px-4 py-4 sm:px-5 sm:py-5"
@@ -221,11 +377,11 @@ export function FileUploadZone() {
             </span>
             <p className="text-sm leading-relaxed text-foreground/90">
               <span className="font-medium text-foreground">
-                AI is preparing to analyze your documents
+                Your PDFs are stored securely
               </span>
               <span className="mt-1 block text-muted-foreground">
-                Once you continue, we&apos;ll run a simulated analysis pipeline on your
-                queue.
+                AI extraction is not part of this milestone. Validation continues to
+                use the existing prototype data.
               </span>
             </p>
           </div>
@@ -244,16 +400,51 @@ export function FileUploadZone() {
           <Button
             type="button"
             className="w-full shadow-soft transition-all duration-200 hover:shadow-soft-lg sm:w-auto sm:min-w-[11rem]"
-            disabled={files.length === 0}
+            disabled={documents.length === 0 || uploads.some((item) => item.status === "uploading")}
             onClick={() => {
-              const fileNames = files.map((file) => file.name).join(",");
+              const fileNames = documents.map((document) => document.file_name).join(",");
               router.push(`/validation?files=${encodeURIComponent(fileNames)}`);
             }}
           >
-            Continue to Validation 
+            Continue to Validation
           </Button>
         </CardFooter>
       </ContentCard>
     </div>
+  );
+}
+
+function StoredDocument({ document }: { document: DocumentRecord }) {
+  return (
+    <li className="flex items-center justify-between gap-3 rounded-xl border border-border/50 bg-card px-4 py-3.5 shadow-sm transition-[border-color,box-shadow] duration-200 ease-out hover:border-primary/25 hover:shadow-soft">
+      <div className="flex min-w-0 flex-1 items-center gap-3">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <FileText className="size-5" strokeWidth={1.5} aria-hidden />
+        </span>
+        <div className="min-w-0 text-left">
+          <p className="truncate font-medium text-foreground">{document.file_name}</p>
+          <p className="text-xs text-muted-foreground">
+            PDF · {formatFileSize(document.file_size)} ·{" "}
+            {new Intl.DateTimeFormat(undefined, {
+              dateStyle: "medium",
+              timeStyle: "short",
+            }).format(new Date(document.created_at))}
+          </p>
+        </div>
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        <StoredStatusBadge status={document.status} />
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          disabled
+          title="Document deletion will be available in a later milestone."
+          aria-label={`Delete ${document.file_name} unavailable`}
+        >
+          <Trash2 className="size-4" />
+        </Button>
+      </div>
+    </li>
   );
 }
