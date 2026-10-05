@@ -17,6 +17,12 @@ type Database = {
           file_type: string;
           file_size: number;
           status?: string;
+          extraction_status?: string;
+          extracted_text?: string | null;
+          page_count?: number | null;
+          extracted_at?: string | null;
+          extraction_error?: string | null;
+          parser_version?: string | null;
         };
         Update: Partial<DocumentRecord>;
         Relationships: [];
