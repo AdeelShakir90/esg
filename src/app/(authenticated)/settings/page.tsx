@@ -4,9 +4,9 @@ export default function SettingsPage() {
   const settingsGroups = [
     {
       title: "Workspace Profile",
-      description: "Basic information for your ESGsimplify demo workspace.",
+      description: "Basic information for your envario demo workspace.",
       items: [
-        { label: "Company Name", value: "ESGsimplify Demo Workspace" },
+        { label: "Company Name", value: "envario Demo Workspace" },
         { label: "Industry", value: "Sustainability Reporting Software" },
         { label: "Region", value: "Austria" },
         { label: "Company Size", value: "Medium Enterprise" },
@@ -57,7 +57,7 @@ export default function SettingsPage() {
                 Settings Center
               </h1>
               <p className="max-w-2xl text-sm leading-6 text-muted-foreground md:text-base">
-                Manage your ESGsimplify demo workspace settings, reporting
+                Manage your envario demo workspace settings, reporting
                 defaults, security controls, and account preferences in one
                 professional interface.
               </p>
@@ -128,7 +128,7 @@ export default function SettingsPage() {
 
         <section className="rounded-3xl border border-dashed border-border/80 bg-background/70 px-6 py-5 text-center shadow-sm">
           <p className="text-sm text-muted-foreground">
-            Demo settings workspace for ESGsimplify - sample content for account
+            Demo settings workspace for envario - sample content for account
             preferences, workspace setup, reporting defaults, and security
             controls.
           </p>

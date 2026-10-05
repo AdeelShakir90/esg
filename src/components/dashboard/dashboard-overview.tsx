@@ -572,7 +572,7 @@ export function DashboardOverview() {
                     <MessageCircle className="size-5" strokeWidth={1.75} aria-hidden />
                   </div>
                   <CardTitle className="text-xl font-semibold text-foreground sm:text-2xl">
-                    ESGsimplify Assistant
+                    envario Assistant
                   </CardTitle>
                   <CardDescription className="mt-1 max-w-2xl">
                     Ask questions about your ESG data, VSME KPIs, uploads, validation, and reports.
@@ -617,7 +617,7 @@ export function DashboardOverview() {
                     value={assistantInput}
                     onChange={(event) => setAssistantInput(event.target.value)}
                     placeholder="Ask about your ESG data..."
-                    aria-label="Ask the ESGsimplify Assistant"
+                    aria-label="Ask the envario Assistant"
                     className="border-0 bg-transparent shadow-none focus-visible:ring-0"
                   />
                   <Button type="submit" size="icon" aria-label="Send message">

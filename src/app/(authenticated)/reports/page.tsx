@@ -202,7 +202,7 @@ export default function ReportsPage() {
 
         <section className="rounded-3xl border border-dashed border-border/70 bg-background/70 px-6 py-5 text-center shadow-sm">
           <p className="text-sm text-muted-foreground">
-            Demo reporting workspace for ESGsimplify - sample content for
+            Demo reporting workspace for envario - sample content for
             showcasing report layouts, validation status, and industry-specific
             reporting views.
           </p>

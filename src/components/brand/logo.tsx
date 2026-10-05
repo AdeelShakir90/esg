@@ -35,7 +35,7 @@ export function Logo({
           {/* YOUR CUSTOM ICON */}
           <Image
             src="/logo2.png"
-            alt="ESGsimplify Logo"
+            alt="envario logo"
             width={40}
             height={40}
           />
@@ -43,7 +43,7 @@ export function Logo({
 
         {showWordmark && (
           <span className="text-base sm:text-lg">
-            ESG<span className="text-primary">simplify</span>
+            en<span className="text-primary">vario</span>
           </span>
         )}
       </span>
