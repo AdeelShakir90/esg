@@ -3,6 +3,12 @@ import "server-only";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 import type { DocumentRow } from "@/lib/documents";
+import type {
+  EsgExtractionInsert,
+  EsgExtractionRow,
+  ExtractedEsgFieldInsert,
+  ExtractedEsgFieldRow,
+} from "@/lib/esg/types";
 
 type Database = {
   public: {
@@ -25,6 +31,18 @@ type Database = {
           parser_version?: string | null;
         };
         Update: Partial<DocumentRow>;
+        Relationships: [];
+      };
+      esg_extractions: {
+        Row: EsgExtractionRow;
+        Insert: EsgExtractionInsert;
+        Update: Partial<EsgExtractionRow>;
+        Relationships: [];
+      };
+      extracted_esg_fields: {
+        Row: ExtractedEsgFieldRow;
+        Insert: ExtractedEsgFieldInsert;
+        Update: Partial<ExtractedEsgFieldRow>;
         Relationships: [];
       };
     };
