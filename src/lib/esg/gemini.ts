@@ -3,7 +3,7 @@ import "server-only";
 import { GoogleGenAI } from "@google/genai";
 
 import { EsgExtractionError } from "./errors";
-import { logGeminiErrorForDevelopment } from "./gemini-diagnostics";
+import { logSafeGeminiProviderFailure } from "./gemini-diagnostics";
 import { parseGeminiStructuredOutput } from "./gemini-response";
 import { createGeminiEsgResponseJsonSchema } from "./gemini-schema";
 import { buildEsgDocumentInput, ESG_EXTRACTION_INSTRUCTIONS } from "./prompt";
@@ -52,7 +52,7 @@ export async function requestGeminiStructuredEsgExtraction(
   } catch (error) {
     if (error instanceof EsgExtractionError) throw error;
 
-    logGeminiErrorForDevelopment(error, model);
+    logSafeGeminiProviderFailure(error, model);
 
     throw new EsgExtractionError(
       "provider_failed",
