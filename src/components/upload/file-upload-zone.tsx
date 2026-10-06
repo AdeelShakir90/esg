@@ -15,6 +15,10 @@ import {
 } from "lucide-react";
 
 import { ContentCard } from "@/components/primitives/content-card";
+import {
+  type EsgExtractionActionResult,
+  triggerEsgExtraction,
+} from "@/components/upload/esg-extraction-action";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { Badge } from "@/components/ui/badge";
@@ -44,6 +48,11 @@ type UploadItem = {
   error?: string;
   document?: DocumentRecord;
 };
+
+type EsgExtractionUiState =
+  | { status: "extracting" }
+  | { status: "success"; extractionId: string }
+  | { status: "error" };
 
 function getClientValidationError(file: File) {
   if (file.type.toLowerCase() !== "application/pdf" || !/\.pdf$/i.test(file.name)) {
@@ -158,6 +167,10 @@ export function FileUploadZone() {
   const [documentsLoading, setDocumentsLoading] = useState(true);
   const [documentsError, setDocumentsError] = useState<string | null>(null);
   const [extractingIds, setExtractingIds] = useState<Set<string>>(() => new Set());
+  const esgExtractionInFlight = useRef<Set<string>>(new Set());
+  const [esgExtractionStates, setEsgExtractionStates] = useState<
+    Record<string, EsgExtractionUiState>
+  >({});
 
   const loadDocuments = useCallback(async () => {
     setDocumentsLoading(true);
@@ -291,6 +304,32 @@ export function FileUploadZone() {
     },
     [extractDocument]
   );
+
+  const extractEsgData = useCallback(async (documentId: string) => {
+    if (esgExtractionInFlight.current.has(documentId)) return;
+
+    esgExtractionInFlight.current.add(documentId);
+    setEsgExtractionStates((current) => ({
+      ...current,
+      [documentId]: { status: "extracting" },
+    }));
+
+    let result: EsgExtractionActionResult;
+    try {
+      result = await triggerEsgExtraction(documentId);
+    } catch {
+      result = { success: false };
+    } finally {
+      esgExtractionInFlight.current.delete(documentId);
+    }
+
+    setEsgExtractionStates((current) => ({
+      ...current,
+      [documentId]: result.success
+        ? { status: "success", extractionId: result.extractionId }
+        : { status: "error" },
+    }));
+  }, []);
 
   const uploadFiles = useCallback(
     async (selectedFiles: File[]) => {
@@ -453,7 +492,9 @@ export function FileUploadZone() {
                     key={document.id}
                     document={document}
                     isExtracting={extractingIds.has(document.id)}
+                    esgExtractionState={esgExtractionStates[document.id]}
                     onExtract={extractDocument}
+                    onExtractEsg={extractEsgData}
                   />
                 ))}
               </ul>
@@ -509,11 +550,15 @@ export function FileUploadZone() {
 function StoredDocument({
   document,
   isExtracting,
+  esgExtractionState,
   onExtract,
+  onExtractEsg,
 }: {
   document: DocumentRecord;
   isExtracting: boolean;
+  esgExtractionState: EsgExtractionUiState | undefined;
   onExtract: (documentId: string) => Promise<void>;
+  onExtractEsg: (documentId: string) => Promise<void>;
 }) {
   const extractionStatus = isExtracting ? "processing" : document.extraction_status;
   const canExtract =
@@ -523,6 +568,8 @@ function StoredDocument({
     );
   const extractionActionLabel =
     document.extraction_status === "pending" ? "Extract text" : "Retry extraction";
+  const canExtractEsg = document.extraction_status === "completed";
+  const isExtractingEsg = esgExtractionState?.status === "extracting";
 
   return (
     <li className="flex flex-col gap-3 rounded-xl border border-border/50 bg-card px-4 py-3.5 shadow-sm transition-[border-color,box-shadow] duration-200 ease-out hover:border-primary/25 hover:shadow-soft sm:flex-row sm:items-center sm:justify-between">
@@ -552,6 +599,16 @@ function StoredDocument({
                 {document.extraction_error}
               </p>
             )}
+          {esgExtractionState?.status === "error" && (
+            <p className="mt-1 text-xs text-destructive" role="alert">
+              ESG extraction failed. Please try again.
+            </p>
+          )}
+          {esgExtractionState?.status === "success" && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Extraction ID: {esgExtractionState.extractionId}
+            </p>
+          )}
         </div>
       </div>
       <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
@@ -570,6 +627,31 @@ function StoredDocument({
             <RefreshCw className="size-3.5" aria-hidden />
             {extractionActionLabel}
           </Button>
+        )}
+        {canExtractEsg && esgExtractionState?.status !== "success" && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={isExtractingEsg}
+            onClick={() => void onExtractEsg(document.id)}
+          >
+            {isExtractingEsg ? (
+              <Loader2 className="size-3.5 animate-spin" aria-hidden />
+            ) : (
+              <Sparkles className="size-3.5" aria-hidden />
+            )}
+            {isExtractingEsg ? "Extracting ESG..." : "Extract ESG data"}
+          </Button>
+        )}
+        {esgExtractionState?.status === "success" && (
+          <Badge
+            variant="secondary"
+            className="gap-1 border border-primary/15 bg-primary/10 font-medium text-primary"
+          >
+            <CheckCircle2 className="size-3" aria-hidden />
+            ESG extracted
+          </Badge>
         )}
         <Button
           type="button"
