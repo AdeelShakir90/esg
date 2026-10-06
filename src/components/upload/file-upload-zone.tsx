@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   FileText,
   Loader2,
+  RefreshCw,
   Sparkles,
   Trash2,
   UploadCloud,
@@ -24,6 +25,8 @@ import {
   CardHeader,
 } from "@/components/ui/card";
 import {
+  type DocumentExtractionResponse,
+  type DocumentExtractionStatus,
   formatFileSize,
   MAX_DOCUMENT_SIZE_BYTES,
   type DocumentRecord,
@@ -95,6 +98,57 @@ function StoredStatusBadge({ status }: { status: string }) {
   );
 }
 
+function ExtractionStatusBadge({
+  status,
+  pageCount,
+}: {
+  status: DocumentExtractionStatus;
+  pageCount: number | null;
+}) {
+  if (status === "processing") {
+    return (
+      <Badge
+        variant="outline"
+        className="gap-1 border-amber-200/90 bg-amber-50/90 font-medium text-amber-900"
+      >
+        <Loader2 className="size-3 animate-spin" aria-hidden />
+        Extracting…
+      </Badge>
+    );
+  }
+
+  if (status === "completed") {
+    const pages = pageCount
+      ? ` · ${pageCount} ${pageCount === 1 ? "page" : "pages"}`
+      : "";
+    return (
+      <Badge
+        variant="secondary"
+        className="border border-primary/15 bg-primary/10 font-medium text-primary"
+      >
+        Extracted{pages}
+      </Badge>
+    );
+  }
+
+  if (status === "no_text") {
+    return (
+      <Badge
+        variant="outline"
+        className="border-amber-200/90 bg-amber-50/90 font-medium text-amber-900"
+      >
+        No text found
+      </Badge>
+    );
+  }
+
+  if (status === "failed") {
+    return <Badge variant="destructive">Failed</Badge>;
+  }
+
+  return <Badge variant="outline">Pending</Badge>;
+}
+
 export function FileUploadZone() {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -103,6 +157,7 @@ export function FileUploadZone() {
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
   const [documentsLoading, setDocumentsLoading] = useState(true);
   const [documentsError, setDocumentsError] = useState<string | null>(null);
+  const [extractingIds, setExtractingIds] = useState<Set<string>>(() => new Set());
 
   const loadDocuments = useCallback(async () => {
     setDocumentsLoading(true);
@@ -133,63 +188,109 @@ export function FileUploadZone() {
     void loadDocuments();
   }, [loadDocuments]);
 
-  const uploadFile = useCallback(async (file: File) => {
-    const id = crypto.randomUUID();
-    const validationError = getClientValidationError(file);
-    const entry: UploadItem = {
-      id,
-      name: file.name,
-      size: file.size,
-      status: validationError ? "error" : "uploading",
-      error: validationError ?? undefined,
-    };
+  const extractDocument = useCallback(
+    async (documentId: string) => {
+      setExtractingIds((current) => new Set(current).add(documentId));
+      setDocuments((current) =>
+        current.map((document) =>
+          document.id === documentId
+            ? {
+                ...document,
+                extraction_status: "processing",
+                extraction_error: null,
+              }
+            : document
+        )
+      );
 
-    setUploads((current) => [entry, ...current]);
-    if (validationError) return;
+      try {
+        const response = await fetch(`/api/documents/${documentId}/extract`, {
+          method: "POST",
+        });
+        const payload = (await response.json()) as DocumentExtractionResponse;
 
-    const formData = new FormData();
-    formData.set("file", file);
+        if (!response.ok) {
+          throw new Error(payload.error ?? "Text extraction failed.");
+        }
+      } catch {
+        // The extraction route persists its own safe failure state when it runs.
+      } finally {
+        await loadDocuments();
+        setExtractingIds((current) => {
+          const next = new Set(current);
+          next.delete(documentId);
+          return next;
+        });
+      }
+    },
+    [loadDocuments]
+  );
 
-    try {
-      const response = await fetch("/api/documents", {
-        method: "POST",
-        body: formData,
-      });
-      const payload = (await response.json()) as {
-        document?: DocumentRecord;
-        error?: string;
+  const uploadFile = useCallback(
+    async (file: File) => {
+      const id = crypto.randomUUID();
+      const validationError = getClientValidationError(file);
+      const entry: UploadItem = {
+        id,
+        name: file.name,
+        size: file.size,
+        status: validationError ? "error" : "uploading",
+        error: validationError ?? undefined,
       };
 
-      if (!response.ok || !payload.document) {
-        throw new Error(payload.error ?? "The PDF could not be uploaded.");
-      }
+      setUploads((current) => [entry, ...current]);
+      if (validationError) return;
 
-      setUploads((current) =>
-        current.map((item) =>
-          item.id === id
-            ? { ...item, status: "success", document: payload.document }
-            : item
-        )
-      );
-      setDocuments((current) => [
-        payload.document as DocumentRecord,
-        ...current.filter((document) => document.id !== payload.document?.id),
-      ]);
-    } catch (error) {
-      setUploads((current) =>
-        current.map((item) =>
-          item.id === id
-            ? {
-                ...item,
-                status: "error",
-                error:
-                  error instanceof Error ? error.message : "The PDF could not be uploaded.",
-              }
-            : item
-        )
-      );
-    }
-  }, []);
+      const formData = new FormData();
+      formData.set("file", file);
+
+      try {
+        const response = await fetch("/api/documents", {
+          method: "POST",
+          body: formData,
+        });
+        const payload = (await response.json()) as {
+          document?: DocumentRecord;
+          error?: string;
+        };
+
+        if (!response.ok || !payload.document) {
+          throw new Error(payload.error ?? "The PDF could not be uploaded.");
+        }
+
+        const uploadedDocument = payload.document;
+        setUploads((current) =>
+          current.map((item) =>
+            item.id === id
+              ? { ...item, status: "success", document: uploadedDocument }
+              : item
+          )
+        );
+        setDocuments((current) => [
+          uploadedDocument,
+          ...current.filter((document) => document.id !== uploadedDocument.id),
+        ]);
+
+        await extractDocument(uploadedDocument.id);
+      } catch (error) {
+        setUploads((current) =>
+          current.map((item) =>
+            item.id === id
+              ? {
+                  ...item,
+                  status: "error",
+                  error:
+                    error instanceof Error
+                      ? error.message
+                      : "The PDF could not be uploaded.",
+                }
+              : item
+          )
+        );
+      }
+    },
+    [extractDocument]
+  );
 
   const uploadFiles = useCallback(
     async (selectedFiles: File[]) => {
@@ -198,16 +299,6 @@ export function FileUploadZone() {
       }
     },
     [uploadFile]
-  );
-
-  const successfulUploads = uploads.filter(
-    (upload) => upload.status === "success" && upload.document
-  );
-  const successfulDocumentIds = new Set(
-    successfulUploads.map((upload) => upload.document?.id)
-  );
-  const storedDocuments = documents.filter(
-    (document) => !successfulDocumentIds.has(document.id)
   );
 
   return (
@@ -355,14 +446,15 @@ export function FileUploadZone() {
               </p>
             )}
 
-            {(successfulUploads.length > 0 || storedDocuments.length > 0) && (
+            {documents.length > 0 && (
               <ul className="flex flex-col gap-2" aria-label="Stored documents">
-                {successfulUploads.map((upload) => {
-                  const document = upload.document as DocumentRecord;
-                  return <StoredDocument key={document.id} document={document} />;
-                })}
-                {storedDocuments.map((document) => (
-                  <StoredDocument key={document.id} document={document} />
+                {documents.map((document) => (
+                  <StoredDocument
+                    key={document.id}
+                    document={document}
+                    isExtracting={extractingIds.has(document.id)}
+                    onExtract={extractDocument}
+                  />
                 ))}
               </ul>
             )}
@@ -414,9 +506,26 @@ export function FileUploadZone() {
   );
 }
 
-function StoredDocument({ document }: { document: DocumentRecord }) {
+function StoredDocument({
+  document,
+  isExtracting,
+  onExtract,
+}: {
+  document: DocumentRecord;
+  isExtracting: boolean;
+  onExtract: (documentId: string) => Promise<void>;
+}) {
+  const extractionStatus = isExtracting ? "processing" : document.extraction_status;
+  const canExtract =
+    !isExtracting &&
+    (["pending", "failed", "no_text"] as DocumentExtractionStatus[]).includes(
+      document.extraction_status
+    );
+  const extractionActionLabel =
+    document.extraction_status === "pending" ? "Extract text" : "Retry extraction";
+
   return (
-    <li className="flex items-center justify-between gap-3 rounded-xl border border-border/50 bg-card px-4 py-3.5 shadow-sm transition-[border-color,box-shadow] duration-200 ease-out hover:border-primary/25 hover:shadow-soft">
+    <li className="flex flex-col gap-3 rounded-xl border border-border/50 bg-card px-4 py-3.5 shadow-sm transition-[border-color,box-shadow] duration-200 ease-out hover:border-primary/25 hover:shadow-soft sm:flex-row sm:items-center sm:justify-between">
       <div className="flex min-w-0 flex-1 items-center gap-3">
         <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
           <FileText className="size-5" strokeWidth={1.5} aria-hidden />
@@ -430,10 +539,38 @@ function StoredDocument({ document }: { document: DocumentRecord }) {
               timeStyle: "short",
             }).format(new Date(document.created_at))}
           </p>
+          {document.extraction_error &&
+            ["failed", "no_text"].includes(document.extraction_status) && (
+              <p
+                className={cn(
+                  "mt-1 text-xs",
+                  document.extraction_status === "failed"
+                    ? "text-destructive"
+                    : "text-muted-foreground"
+                )}
+              >
+                {document.extraction_error}
+              </p>
+            )}
         </div>
       </div>
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
         <StoredStatusBadge status={document.status} />
+        <ExtractionStatusBadge
+          status={extractionStatus}
+          pageCount={document.page_count}
+        />
+        {canExtract && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => void onExtract(document.id)}
+          >
+            <RefreshCw className="size-3.5" aria-hidden />
+            {extractionActionLabel}
+          </Button>
+        )}
         <Button
           type="button"
           variant="ghost"

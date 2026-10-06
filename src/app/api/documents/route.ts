@@ -21,7 +21,9 @@ export async function GET() {
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase
       .from("documents")
-      .select("id, created_at, file_name, storage_path, file_type, file_size, status")
+      .select(
+        "id, created_at, file_name, file_type, file_size, status, extraction_status, page_count, extracted_at, extraction_error, parser_version"
+      )
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -97,7 +99,9 @@ export async function POST(request: Request) {
         file_size: file.size,
         status: "uploaded",
       })
-      .select("id, created_at, file_name, storage_path, file_type, file_size, status")
+      .select(
+        "id, created_at, file_name, file_type, file_size, status, extraction_status, page_count, extracted_at, extraction_error, parser_version"
+      )
       .single();
 
     if (insertError) {

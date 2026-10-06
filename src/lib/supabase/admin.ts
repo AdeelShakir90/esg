@@ -2,13 +2,13 @@ import "server-only";
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-import type { DocumentRecord } from "@/lib/documents";
+import type { DocumentRow } from "@/lib/documents";
 
 type Database = {
   public: {
     Tables: {
       documents: {
-        Row: DocumentRecord;
+        Row: DocumentRow;
         Insert: {
           id?: string;
           created_at?: string;
@@ -24,7 +24,7 @@ type Database = {
           extraction_error?: string | null;
           parser_version?: string | null;
         };
-        Update: Partial<DocumentRecord>;
+        Update: Partial<DocumentRow>;
         Relationships: [];
       };
     };
