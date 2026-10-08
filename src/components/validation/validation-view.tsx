@@ -6,10 +6,14 @@ import {
   AlertCircle,
   CalendarDays,
   CheckCircle2,
+  CircleX,
   FileCheck2,
   Loader2,
   LockKeyhole,
+  Pencil,
   Quote,
+  RotateCcw,
+  Save,
 } from "lucide-react";
 
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
@@ -17,6 +21,7 @@ import { ContentCard } from "@/components/primitives/content-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
+import { Input } from "@/components/ui/input";
 import {
   loadValidationData,
   type ValidationLoadErrorCode,
@@ -30,6 +35,18 @@ import {
   formatExtractedValue,
   formatReportingPeriod,
 } from "@/lib/esg/validation-format";
+import {
+  createDemoReviewSession,
+  getDemoReviewScope,
+  getDemoReviewSummary,
+  getEffectiveDemoReview,
+  getScopedDemoReviews,
+  parseDemoEditedValue,
+  resetDemoReviewDecision,
+  setDemoReviewDecision,
+  type DemoReviewDecision,
+} from "@/lib/esg/validation-review";
+import type { EsgFieldValue } from "@/lib/esg/schema";
 import { cn } from "@/lib/utils";
 
 type ValidationViewProps = {
@@ -95,8 +112,10 @@ const ERROR_MESSAGES: Record<
 
 function ValidationStatusBadge({
   status,
+  temporary = false,
 }: {
   status: ValidationField["validationStatus"];
+  temporary?: boolean;
 }) {
   const labels = {
     pending: "Pending",
@@ -114,13 +133,75 @@ function ValidationStatusBadge({
       )}
     >
       {labels[status]}
+      {temporary && status !== "pending" ? " (demo)" : ""}
     </Badge>
   );
 }
 
-function FieldCard({ field }: { field: ValidationField }) {
+function formatReviewValue(value: EsgFieldValue | null, unit: string | null) {
+  if (!value) return "Not found";
+  const formatted =
+    value.type === "boolean"
+      ? value.value
+        ? "Yes"
+        : "No"
+      : new Intl.NumberFormat("en-US", { maximumFractionDigits: 3 }).format(
+          value.value
+        );
+  return unit && value.type !== "boolean" ? `${formatted} ${unit}` : formatted;
+}
+
+function FieldCard({
+  field,
+  decision,
+  onDecision,
+  onReset,
+}: {
+  field: ValidationField;
+  decision: DemoReviewDecision | undefined;
+  onDecision: (decision: DemoReviewDecision) => void;
+  onReset: () => void;
+}) {
   const confidence = formatConfidence(field.confidence);
   const reportingPeriod = formatReportingPeriod(field);
+  const effectiveReview = getEffectiveDemoReview(field, decision);
+  const [editing, setEditing] = useState(false);
+  const [draftValue, setDraftValue] = useState<string | boolean | null>("");
+  const [editError, setEditError] = useState<string | null>(null);
+
+  function beginEdit() {
+    const currentValue = effectiveReview.value;
+    setDraftValue(
+      currentValue?.type === "boolean"
+        ? currentValue.value
+        : currentValue?.value.toString() ?? ""
+    );
+    setEditError(null);
+    setEditing(true);
+  }
+
+  function finishDecision(nextDecision: DemoReviewDecision) {
+    onDecision(nextDecision);
+    setEditing(false);
+    setEditError(null);
+  }
+
+  function saveEdit() {
+    if (draftValue === null) {
+      setEditError("Choose Yes or No.");
+      return;
+    }
+    const parsed = parseDemoEditedValue(field.key, draftValue);
+    if (!parsed.success) {
+      setEditError(parsed.message);
+      return;
+    }
+    finishDecision({ status: "edited", editedValue: parsed.value });
+  }
+
+  const isBoolean = field.value?.type === "boolean" ||
+    field.key === "supplier_code_of_conduct" ||
+    field.key === "anti_corruption_policy";
 
   return (
     <article className="flex h-full flex-col rounded-2xl border border-border/60 bg-card p-5 shadow-sm">
@@ -132,10 +213,10 @@ function FieldCard({ field }: { field: ValidationField }) {
           <p
             className={cn(
               "mt-2 text-2xl font-semibold tracking-tight",
-              field.status === "found" ? "text-foreground" : "text-muted-foreground"
+              effectiveReview.value ? "text-foreground" : "text-muted-foreground"
             )}
           >
-            {formatExtractedValue(field)}
+            {formatReviewValue(effectiveReview.value, field.unit)}
           </p>
         </div>
         <Badge
@@ -155,7 +236,10 @@ function FieldCard({ field }: { field: ValidationField }) {
             Validation
           </dt>
           <dd className="mt-1">
-            <ValidationStatusBadge status={field.validationStatus} />
+            <ValidationStatusBadge
+              status={effectiveReview.status}
+              temporary={effectiveReview.isTemporary}
+            />
           </dd>
         </div>
         {confidence && (
@@ -177,12 +261,150 @@ function FieldCard({ field }: { field: ValidationField }) {
         )}
       </dl>
 
+      {decision?.status === "edited" && (
+        <div className="mt-4 grid gap-3 rounded-xl border border-primary/20 bg-primary/[0.04] p-4 text-sm sm:grid-cols-2">
+          <div>
+            <p className="text-xs font-medium uppercase text-muted-foreground">
+              Original AI value
+            </p>
+            <p className="mt-1 font-medium text-foreground">
+              {formatExtractedValue(field)}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs font-medium uppercase text-primary">
+              Temporary edited value
+            </p>
+            <p className="mt-1 font-medium text-foreground">
+              {formatReviewValue(decision.editedValue, field.unit)}
+            </p>
+          </div>
+        </div>
+      )}
+
       {field.evidence.quote && (
         <blockquote className="mt-4 rounded-xl border-l-2 border-primary/40 bg-secondary/35 px-4 py-3 text-sm leading-6 text-muted-foreground">
           <Quote className="mb-1 size-4 text-primary" aria-hidden />
           {field.evidence.quote}
         </blockquote>
       )}
+
+      {editing && (
+        <div className="mt-4 rounded-xl border border-border/70 bg-muted/25 p-4">
+          <p className="text-sm font-medium text-foreground">Temporary value</p>
+          {isBoolean ? (
+            <div className="mt-3 grid grid-cols-2 gap-2" role="group" aria-label="Boolean value">
+              {[true, false].map((value) => (
+                <Button
+                  key={String(value)}
+                  type="button"
+                  size="sm"
+                  variant={draftValue === value ? "secondary" : "outline"}
+                  aria-pressed={draftValue === value}
+                  onClick={() => {
+                    setDraftValue(value);
+                    setEditError(null);
+                  }}
+                >
+                  {value ? "Yes" : "No"}
+                </Button>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-3 flex items-center gap-2">
+              <Input
+                type="number"
+                min={0}
+                max={
+                  field.key === "renewable_electricity_share" ||
+                  field.key === "recycling_recovery_rate"
+                    ? 100
+                    : undefined
+                }
+                step={field.key === "employee_count" ? 1 : "any"}
+                inputMode="decimal"
+                value={typeof draftValue === "string" ? draftValue : ""}
+                aria-invalid={Boolean(editError)}
+                aria-describedby={editError ? `${field.id}-edit-error` : undefined}
+                onChange={(event) => {
+                  setDraftValue(event.target.value);
+                  setEditError(null);
+                }}
+              />
+              {field.unit && (
+                <span className="shrink-0 text-sm text-muted-foreground">
+                  {field.unit}
+                </span>
+              )}
+            </div>
+          )}
+          {editError && (
+            <p id={`${field.id}-edit-error`} className="mt-2 text-xs text-destructive" role="alert">
+              {editError}
+            </p>
+          )}
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button type="button" size="sm" onClick={saveEdit}>
+              <Save className="size-3.5" aria-hidden />
+              Use temporary value
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setEditing(false);
+                setEditError(null);
+              }}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <div className="mt-auto grid grid-cols-2 gap-2 border-t border-border/50 pt-4 sm:flex sm:flex-wrap">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() =>
+            finishDecision({ status: "approved", editedValue: null })
+          }
+        >
+          <CheckCircle2 className="size-3.5" aria-hidden />
+          Approve
+        </Button>
+        <Button type="button" size="sm" variant="outline" onClick={beginEdit}>
+          <Pencil className="size-3.5" aria-hidden />
+          Edit
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="destructive"
+          onClick={() =>
+            finishDecision({ status: "rejected", editedValue: null })
+          }
+        >
+          <CircleX className="size-3.5" aria-hidden />
+          Reject
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          disabled={!decision}
+          onClick={() => {
+            onReset();
+            setEditing(false);
+            setEditError(null);
+          }}
+        >
+          <RotateCcw className="size-3.5" aria-hidden />
+          Reset
+        </Button>
+      </div>
     </article>
   );
 }
@@ -227,67 +449,28 @@ function StateMessage({
   );
 }
 
-export function ValidationView({
-  documentId,
-  invalidDocumentId,
-}: ValidationViewProps) {
-  const [state, setState] = useState<ViewState>(() => {
-    if (!documentId) {
-      return {
-        status: "error",
-        code: invalidDocumentId ? "invalid_document_id" : "missing_document_id",
-      };
-    }
-    return { status: "loading" };
-  });
-
-  useEffect(() => {
-    if (!documentId) return;
-    let cancelled = false;
-
-    void loadValidationData(documentId).then((result) => {
-      if (cancelled) return;
-      setState(
-        result.success
-          ? { status: "ready", validation: result.validation }
-          : { status: "error", code: result.code }
-      );
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [documentId]);
-
-  const groupedFields = useMemo(() => {
-    if (state.status !== "ready") return null;
-    return {
-      environmental: state.validation.fields.filter(
+function ReadyValidationView({ validation }: { validation: ValidationData }) {
+  const scopeKey = getDemoReviewScope(
+    validation.document.id,
+    validation.extraction.id
+  );
+  const [reviewSession, setReviewSession] = useState(() =>
+    createDemoReviewSession(scopeKey)
+  );
+  const reviews = getScopedDemoReviews(reviewSession, scopeKey);
+  const summary = getDemoReviewSummary(validation.fields, reviews);
+  const groupedFields = useMemo(
+    () => ({
+      environmental: validation.fields.filter(
         (field) => field.category === "environmental"
       ),
-      social: state.validation.fields.filter((field) => field.category === "social"),
-      governance: state.validation.fields.filter(
+      social: validation.fields.filter((field) => field.category === "social"),
+      governance: validation.fields.filter(
         (field) => field.category === "governance"
       ),
-    };
-  }, [state]);
-
-  if (state.status === "loading") {
-    return (
-      <StateMessage
-        loading
-        title="Loading validation data"
-        message="Retrieving the latest completed ESG extraction for this document."
-      />
-    );
-  }
-
-  if (state.status === "error") {
-    const error = ERROR_MESSAGES[state.code];
-    return <StateMessage title={error.title} message={error.message} />;
-  }
-
-  const { validation } = state;
+    }),
+    [validation.fields]
+  );
 
   return (
     <DashboardShell>
@@ -296,13 +479,13 @@ export function ValidationView({
           <div className="border-b border-border/50 bg-secondary/20 p-6 md:p-8">
             <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
               <div className="max-w-3xl">
-                <Badge className="bg-primary/10 text-primary">Read-only validation</Badge>
+                <Badge className="bg-primary/10 text-primary">Demo validation</Badge>
                 <h1 className="mt-4 font-heading text-3xl font-semibold tracking-tight text-foreground">
                   Validate extracted ESG data
                 </h1>
                 <p className="mt-3 text-sm leading-6 text-muted-foreground md:text-base">
-                  Review the latest completed extraction. Editing and approval will be
-                  added in the next validation milestone.
+                  Review real extracted fields and try validation decisions for this
+                  session. Source values and evidence remain unchanged.
                 </p>
               </div>
               <Link
@@ -353,58 +536,167 @@ export function ValidationView({
           </div>
         </ContentCard>
 
-        {groupedFields &&
-          (Object.keys(CATEGORY_LABELS) as Array<keyof typeof CATEGORY_LABELS>).map(
-            (category) => (
-              <section key={category} aria-labelledby={`${category}-heading`}>
-                <div className="mb-4 flex items-center justify-between gap-3">
-                  <div>
-                    <h2
-                      id={`${category}-heading`}
-                      className="font-heading text-xl font-semibold text-foreground"
-                    >
-                      {CATEGORY_LABELS[category]}
-                    </h2>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {groupedFields[category].length} extracted fields
-                    </p>
-                  </div>
-                  <FileCheck2 className="size-5 text-primary" aria-hidden />
-                </div>
-                <div className="grid gap-4 lg:grid-cols-2">
-                  {groupedFields[category].map((field) => (
-                    <FieldCard key={field.id} field={field} />
-                  ))}
-                </div>
-              </section>
-            )
-          )}
+        <div
+          className="flex gap-3 rounded-2xl border border-primary/20 bg-primary/[0.06] px-5 py-4 text-sm text-foreground shadow-sm"
+          role="status"
+        >
+          <LockKeyhole className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden />
+          <p>
+            <span className="font-semibold">Demo mode</span> — review changes are
+            temporary and are not saved to Supabase.
+          </p>
+        </div>
 
-        <ContentCard className="flex flex-col gap-5 p-6 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex gap-3">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-              <LockKeyhole className="size-5" aria-hidden />
-            </span>
+        <ContentCard className="p-5 sm:p-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <h2 className="font-heading font-semibold text-foreground">
-                Review controls are read-only
+              <h2 className="font-heading text-lg font-semibold text-foreground">
+                Review summary
               </h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                No approval, rejection, or edits will be saved in this milestone.
+                Current status for this temporary browser session.
               </p>
             </div>
+            <dl className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+              {(
+                [
+                  ["Total", summary.total],
+                  ["Approved", summary.approved],
+                  ["Edited", summary.edited],
+                  ["Rejected", summary.rejected],
+                  ["Pending", summary.pending],
+                ] as const
+              ).map(([label, value]) => (
+                <div
+                  key={label}
+                  className="min-w-24 rounded-xl border border-border/60 bg-muted/25 px-3 py-2 text-center"
+                >
+                  <dt className="text-xs text-muted-foreground">{label}</dt>
+                  <dd className="mt-0.5 text-lg font-semibold text-foreground">
+                    {value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="outline" disabled>
-              Edit values unavailable
-            </Button>
-            <Button type="button" disabled>
-              <CheckCircle2 className="size-4" aria-hidden />
-              Approve fields unavailable
-            </Button>
+        </ContentCard>
+
+        {(Object.keys(CATEGORY_LABELS) as Array<keyof typeof CATEGORY_LABELS>).map(
+          (category) => (
+            <section key={category} aria-labelledby={`${category}-heading`}>
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div>
+                  <h2
+                    id={`${category}-heading`}
+                    className="font-heading text-xl font-semibold text-foreground"
+                  >
+                    {CATEGORY_LABELS[category]}
+                  </h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {groupedFields[category].length} extracted fields
+                  </p>
+                </div>
+                <FileCheck2 className="size-5 text-primary" aria-hidden />
+              </div>
+              <div className="grid gap-4 lg:grid-cols-2">
+                {groupedFields[category].map((field) => (
+                  <FieldCard
+                    key={field.id}
+                    field={field}
+                    decision={reviews[field.id]}
+                    onDecision={(decision) =>
+                      setReviewSession((current) =>
+                        setDemoReviewDecision(
+                          current,
+                          scopeKey,
+                          field.id,
+                          decision
+                        )
+                      )
+                    }
+                    onReset={() =>
+                      setReviewSession((current) =>
+                        resetDemoReviewDecision(current, scopeKey, field.id)
+                      )
+                    }
+                  />
+                ))}
+              </div>
+            </section>
+          )
+        )}
+
+        <ContentCard className="flex gap-3 p-6">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <LockKeyhole className="size-5" aria-hidden />
+          </span>
+          <div>
+            <h2 className="font-heading font-semibold text-foreground">
+              Temporary review session
+            </h2>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">
+              Reset restores a field to its backend state. Changing documents,
+              changing extraction runs, or refreshing this page discards every demo
+              decision.
+            </p>
           </div>
         </ContentCard>
       </div>
     </DashboardShell>
+  );
+}
+
+export function ValidationView({
+  documentId,
+  invalidDocumentId,
+}: ValidationViewProps) {
+  const [state, setState] = useState<ViewState>(() => {
+    if (!documentId) {
+      return {
+        status: "error",
+        code: invalidDocumentId ? "invalid_document_id" : "missing_document_id",
+      };
+    }
+    return { status: "loading" };
+  });
+
+  useEffect(() => {
+    if (!documentId) return;
+    let cancelled = false;
+
+    void loadValidationData(documentId).then((result) => {
+      if (cancelled) return;
+      setState(
+        result.success
+          ? { status: "ready", validation: result.validation }
+          : { status: "error", code: result.code }
+      );
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [documentId]);
+
+  if (state.status === "loading") {
+    return (
+      <StateMessage
+        loading
+        title="Loading validation data"
+        message="Retrieving the latest completed ESG extraction for this document."
+      />
+    );
+  }
+
+  if (state.status === "error") {
+    const error = ERROR_MESSAGES[state.code];
+    return <StateMessage title={error.title} message={error.message} />;
+  }
+
+  return (
+    <ReadyValidationView
+      key={`${state.validation.document.id}:${state.validation.extraction.id}`}
+      validation={state.validation}
+    />
   );
 }
