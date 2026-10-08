@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   AlertCircle,
+  ArrowRight,
   CheckCircle2,
   FileText,
   Loader2,
@@ -171,6 +172,9 @@ export function FileUploadZone() {
   const [esgExtractionStates, setEsgExtractionStates] = useState<
     Record<string, EsgExtractionUiState>
   >({});
+  const validationDocumentId = documents.find(
+    (document) => esgExtractionStates[document.id]?.status === "success"
+  )?.id;
 
   const loadDocuments = useCallback(async () => {
     setDocumentsLoading(true);
@@ -513,8 +517,8 @@ export function FileUploadZone() {
                 Your PDFs are stored securely
               </span>
               <span className="mt-1 block text-muted-foreground">
-                AI extraction is not part of this milestone. Validation continues to
-                use the existing prototype data.
+                Completed ESG extractions can now be reviewed in read-only validation.
+                Editing and approvals will be added in a later milestone.
               </span>
             </p>
           </div>
@@ -533,10 +537,16 @@ export function FileUploadZone() {
           <Button
             type="button"
             className="w-full shadow-soft transition-all duration-200 hover:shadow-soft-lg sm:w-auto sm:min-w-[11rem]"
-            disabled={documents.length === 0 || uploads.some((item) => item.status === "uploading")}
+            disabled={
+              !validationDocumentId ||
+              uploads.some((item) => item.status === "uploading")
+            }
             onClick={() => {
-              const fileNames = documents.map((document) => document.file_name).join(",");
-              router.push(`/validation?files=${encodeURIComponent(fileNames)}`);
+              if (validationDocumentId) {
+                router.push(
+                  `/validation?documentId=${encodeURIComponent(validationDocumentId)}`
+                );
+              }
             }}
           >
             Continue to Validation
@@ -652,6 +662,15 @@ function StoredDocument({
             <CheckCircle2 className="size-3" aria-hidden />
             ESG extracted
           </Badge>
+        )}
+        {canExtractEsg && !isExtractingEsg && (
+          <Link
+            href={`/validation?documentId=${encodeURIComponent(document.id)}`}
+            className={buttonVariants({ variant: "outline", size: "sm" })}
+          >
+            Review ESG data
+            <ArrowRight className="size-3.5" aria-hidden />
+          </Link>
         )}
         <Button
           type="button"
