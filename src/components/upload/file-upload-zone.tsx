@@ -580,21 +580,34 @@ function StoredDocument({
     document.extraction_status === "pending" ? "Extract text" : "Retry extraction";
   const canExtractEsg = document.extraction_status === "completed";
   const isExtractingEsg = esgExtractionState?.status === "extracting";
+  const createdAt = new Date(document.created_at);
 
   return (
-    <li className="flex flex-col gap-3 rounded-xl border border-border/50 bg-card px-4 py-3.5 shadow-sm transition-[border-color,box-shadow] duration-200 ease-out hover:border-primary/25 hover:shadow-soft sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex min-w-0 flex-1 items-center gap-3">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+    <li className="rounded-xl border border-border/50 bg-card px-4 py-4 shadow-sm transition-[border-color,box-shadow] duration-200 ease-out hover:border-primary/25 hover:shadow-soft sm:px-5">
+      <div className="flex min-w-0 items-start gap-3">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary sm:size-11">
           <FileText className="size-5" strokeWidth={1.5} aria-hidden />
         </span>
-        <div className="min-w-0 text-left">
-          <p className="truncate font-medium text-foreground">{document.file_name}</p>
-          <p className="text-xs text-muted-foreground">
-            PDF · {formatFileSize(document.file_size)} ·{" "}
-            {new Intl.DateTimeFormat(undefined, {
-              dateStyle: "medium",
-              timeStyle: "short",
-            }).format(new Date(document.created_at))}
+        <div className="min-w-0 flex-1 text-left">
+          <p
+            className="truncate font-medium leading-6 text-foreground"
+            title={document.file_name}
+          >
+            {document.file_name}
+          </p>
+          <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+            <span className="whitespace-nowrap">PDF</span>
+            <span aria-hidden>·</span>
+            <span className="whitespace-nowrap">
+              {formatFileSize(document.file_size)}
+            </span>
+            <span aria-hidden>·</span>
+            <time className="whitespace-nowrap" dateTime={document.created_at}>
+              {new Intl.DateTimeFormat(undefined, {
+                dateStyle: "medium",
+                timeStyle: "short",
+              }).format(createdAt)}
+            </time>
           </p>
           {document.extraction_error &&
             ["failed", "no_text"].includes(document.extraction_status) && (
@@ -615,73 +628,82 @@ function StoredDocument({
             </p>
           )}
           {esgExtractionState?.status === "success" && (
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="mt-1 break-all text-xs text-muted-foreground">
               Extraction ID: {esgExtractionState.extractionId}
             </p>
           )}
         </div>
       </div>
-      <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
-        <StoredStatusBadge status={document.status} />
-        <ExtractionStatusBadge
-          status={extractionStatus}
-          pageCount={document.page_count}
-        />
-        {canExtract && (
+      <div className="mt-3 flex flex-col gap-3 border-t border-border/50 pt-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <StoredStatusBadge status={document.status} />
+          <ExtractionStatusBadge
+            status={extractionStatus}
+            pageCount={document.page_count}
+          />
+          {esgExtractionState?.status === "success" && (
+            <Badge
+              variant="secondary"
+              className="gap-1 border border-primary/15 bg-primary/10 font-medium text-primary"
+            >
+              <CheckCircle2 className="size-3" aria-hidden />
+              ESG extracted
+            </Badge>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:justify-end">
+          {canExtract && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="flex-1 sm:flex-none"
+              onClick={() => void onExtract(document.id)}
+            >
+              <RefreshCw className="size-3.5" aria-hidden />
+              {extractionActionLabel}
+            </Button>
+          )}
+          {canExtractEsg && esgExtractionState?.status !== "success" && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="flex-1 sm:flex-none"
+              disabled={isExtractingEsg}
+              onClick={() => void onExtractEsg(document.id)}
+            >
+              {isExtractingEsg ? (
+                <Loader2 className="size-3.5 animate-spin" aria-hidden />
+              ) : (
+                <Sparkles className="size-3.5" aria-hidden />
+              )}
+              {isExtractingEsg ? "Extracting ESG..." : "Extract ESG data"}
+            </Button>
+          )}
+          {canExtractEsg && !isExtractingEsg && (
+            <Link
+              href={`/validation?documentId=${encodeURIComponent(document.id)}`}
+              className={cn(
+                buttonVariants({ variant: "outline", size: "sm" }),
+                "flex-1 sm:flex-none"
+              )}
+            >
+              Review ESG data
+              <ArrowRight className="size-3.5" aria-hidden />
+            </Link>
+          )}
           <Button
             type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => void onExtract(document.id)}
+            variant="ghost"
+            size="icon-sm"
+            disabled
+            title="Document deletion will be available in a later milestone."
+            aria-label={`Delete ${document.file_name} unavailable`}
           >
-            <RefreshCw className="size-3.5" aria-hidden />
-            {extractionActionLabel}
+            <Trash2 className="size-4" />
           </Button>
-        )}
-        {canExtractEsg && esgExtractionState?.status !== "success" && (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={isExtractingEsg}
-            onClick={() => void onExtractEsg(document.id)}
-          >
-            {isExtractingEsg ? (
-              <Loader2 className="size-3.5 animate-spin" aria-hidden />
-            ) : (
-              <Sparkles className="size-3.5" aria-hidden />
-            )}
-            {isExtractingEsg ? "Extracting ESG..." : "Extract ESG data"}
-          </Button>
-        )}
-        {esgExtractionState?.status === "success" && (
-          <Badge
-            variant="secondary"
-            className="gap-1 border border-primary/15 bg-primary/10 font-medium text-primary"
-          >
-            <CheckCircle2 className="size-3" aria-hidden />
-            ESG extracted
-          </Badge>
-        )}
-        {canExtractEsg && !isExtractingEsg && (
-          <Link
-            href={`/validation?documentId=${encodeURIComponent(document.id)}`}
-            className={buttonVariants({ variant: "outline", size: "sm" })}
-          >
-            Review ESG data
-            <ArrowRight className="size-3.5" aria-hidden />
-          </Link>
-        )}
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          disabled
-          title="Document deletion will be available in a later milestone."
-          aria-label={`Delete ${document.file_name} unavailable`}
-        >
-          <Trash2 className="size-4" />
-        </Button>
+        </div>
       </div>
     </li>
   );
