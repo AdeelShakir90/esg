@@ -6,6 +6,11 @@ import {
 import type { EsgFieldValue } from "./schema";
 import type { ValidationData, ValidationField } from "./validation";
 import { formatConfidence, formatReportingPeriod } from "./validation-format";
+import {
+  getEffectiveDemoReview,
+  type DemoReviewDecision,
+  type DemoReviewState,
+} from "./validation-review";
 
 export const DASHBOARD_CATEGORIES = [
   "environmental",
@@ -19,8 +24,11 @@ export type DashboardIndicator = {
   label: string;
   category: EsgCategory;
   extractionStatus: ValidationField["status"];
-  validationStatus: ValidationField["validationStatus"];
-  value: EsgFieldValue | null;
+  reviewStatus: ValidationField["validationStatus"];
+  isTemporary: boolean;
+  sourceValue: EsgFieldValue | null;
+  sourceDisplayValue: string;
+  effectiveValue: EsgFieldValue | null;
   displayValue: string;
   unit: string | null;
   reportingPeriod: string | null;
@@ -46,6 +54,7 @@ export type DashboardProjection = {
   approved: number;
   edited: number;
   rejected: number;
+  temporaryDecisionCount: number;
   categories: DashboardCategoryProjection[];
 };
 
@@ -58,8 +67,13 @@ function formatValue(value: EsgFieldValue | null) {
   }).format(value.value);
 }
 
-function toIndicator(field: ValidationField): DashboardIndicator {
-  const value = field.status === "found" ? field.value : null;
+function toIndicator(
+  field: ValidationField,
+  decision: DemoReviewDecision | undefined
+): DashboardIndicator {
+  const sourceValue = field.status === "found" ? field.value : null;
+  const effectiveReview = getEffectiveDemoReview(field, decision);
+  const effectiveValue = effectiveReview.value;
 
   return {
     id: field.id,
@@ -67,10 +81,13 @@ function toIndicator(field: ValidationField): DashboardIndicator {
     label: field.label,
     category: field.category,
     extractionStatus: field.status,
-    validationStatus: field.validationStatus,
-    value,
-    displayValue: formatValue(value),
-    unit: field.status === "found" ? field.unit : null,
+    reviewStatus: effectiveReview.status,
+    isTemporary: effectiveReview.isTemporary,
+    sourceValue,
+    sourceDisplayValue: formatValue(sourceValue),
+    effectiveValue,
+    displayValue: formatValue(effectiveValue),
+    unit: effectiveValue ? field.unit : null,
     reportingPeriod: formatReportingPeriod(field),
     confidence: formatConfidence(field.confidence),
     evidence: field.evidence,
@@ -78,7 +95,8 @@ function toIndicator(field: ValidationField): DashboardIndicator {
 }
 
 export function projectDashboardData(
-  validation: ValidationData
+  validation: ValidationData,
+  reviews: DemoReviewState = {}
 ): DashboardProjection {
   const fieldByKey = new Map(validation.fields.map((field) => [field.key, field]));
 
@@ -94,7 +112,7 @@ export function projectDashboardData(
     if (!field || field.category !== definition.category) {
       throw new Error(`Dashboard data is missing ${definition.key}.`);
     }
-    return toIndicator(field);
+    return toIndicator(field, reviews[field.id]);
   });
 
   const categories = DASHBOARD_CATEGORIES.map((category) => {
@@ -125,16 +143,19 @@ export function projectDashboardData(
     found,
     notFound: indicators.length - found,
     pending: indicators.filter(
-      (indicator) => indicator.validationStatus === "pending"
+      (indicator) => indicator.reviewStatus === "pending"
     ).length,
     approved: indicators.filter(
-      (indicator) => indicator.validationStatus === "approved"
+      (indicator) => indicator.reviewStatus === "approved"
     ).length,
     edited: indicators.filter(
-      (indicator) => indicator.validationStatus === "edited"
+      (indicator) => indicator.reviewStatus === "edited"
     ).length,
     rejected: indicators.filter(
-      (indicator) => indicator.validationStatus === "rejected"
+      (indicator) => indicator.reviewStatus === "rejected"
+    ).length,
+    temporaryDecisionCount: indicators.filter(
+      (indicator) => indicator.isTemporary
     ).length,
     categories,
   };

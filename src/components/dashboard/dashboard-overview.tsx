@@ -11,6 +11,7 @@ import {
   FileText,
   Leaf,
   Loader2,
+  RotateCcw,
   ShieldCheck,
   Users,
 } from "lucide-react";
@@ -18,6 +19,7 @@ import {
 import { ContentCard } from "@/components/primitives/content-card";
 import { PageTitle, Subtitle } from "@/components/primitives/typography";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import {
   CardContent,
@@ -29,6 +31,7 @@ import {
   loadValidationData,
   type ValidationLoadErrorCode,
 } from "@/components/validation/validation-data-action";
+import { useDemoReview } from "@/components/validation/demo-review-provider";
 import { design } from "@/lib/design-tokens";
 import {
   projectDashboardData,
@@ -38,6 +41,7 @@ import {
 } from "@/lib/esg/dashboard";
 import type { EsgCategory } from "@/lib/esg/definitions";
 import type { ValidationData } from "@/lib/esg/validation";
+import { getDemoReviewScope } from "@/lib/esg/validation-review";
 import { cn } from "@/lib/utils";
 
 type DashboardOverviewProps = {
@@ -170,9 +174,18 @@ function StatusView({ state }: { state: Exclude<ViewState, { status: "ready" }> 
 
 function IndicatorCard({ indicator }: { indicator: DashboardIndicator }) {
   const found = indicator.extractionStatus === "found";
+  const temporarilyEdited =
+    indicator.isTemporary && indicator.reviewStatus === "edited";
+  const temporarilyRejected =
+    indicator.isTemporary && indicator.reviewStatus === "rejected";
 
   return (
-    <ContentCard className="h-full overflow-hidden">
+    <ContentCard
+      className={cn(
+        "h-full overflow-hidden",
+        temporarilyRejected && "border-destructive/25"
+      )}
+    >
       <CardHeader className="gap-3 pb-3">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <Badge
@@ -186,8 +199,19 @@ function IndicatorCard({ indicator }: { indicator: DashboardIndicator }) {
           >
             {found ? "Found" : "Not found"}
           </Badge>
-          <Badge variant="outline" className="font-normal text-muted-foreground">
-            {VALIDATION_LABELS[indicator.validationStatus]}
+          <Badge
+            variant={indicator.reviewStatus === "rejected" ? "destructive" : "outline"}
+            className={cn(
+              "font-normal",
+              indicator.reviewStatus === "approved" &&
+                "border-primary/20 bg-primary/10 text-primary",
+              indicator.reviewStatus !== "rejected" && "text-muted-foreground"
+            )}
+          >
+            {VALIDATION_LABELS[indicator.reviewStatus]}
+            {indicator.isTemporary && indicator.reviewStatus !== "pending"
+              ? " (demo)"
+              : ""}
           </Badge>
         </div>
         <CardTitle className="text-base leading-6">{indicator.label}</CardTitle>
@@ -203,9 +227,32 @@ function IndicatorCard({ indicator }: { indicator: DashboardIndicator }) {
             ) : null}
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            AI-extracted source value
+            {temporarilyEdited
+              ? "Temporary demo edit"
+              : temporarilyRejected
+                ? "Original AI-extracted value, retained for traceability"
+                : "AI-extracted source value"}
           </p>
         </div>
+
+        {temporarilyEdited ? (
+          <div className="rounded-lg border border-border/60 bg-muted/25 p-3">
+            <p className="text-xs text-muted-foreground">
+              Original AI-extracted value
+            </p>
+            <p className="mt-1 text-sm font-medium text-foreground">
+              {indicator.sourceDisplayValue}
+              {indicator.sourceValue && indicator.unit ? ` ${indicator.unit}` : ""}
+            </p>
+          </div>
+        ) : null}
+
+        {temporarilyRejected ? (
+          <p className="rounded-lg border border-destructive/20 bg-destructive/[0.05] p-3 text-xs leading-5 text-destructive">
+            Rejected for this demo session. It remains part of source coverage but is
+            not treated as accepted review data.
+          </p>
+        ) : null}
 
         <dl className="grid grid-cols-2 gap-3 border-t border-border/50 pt-3 text-sm">
           <div>
@@ -274,7 +321,13 @@ function CategorySection({ category }: { category: DashboardCategoryProjection }
   );
 }
 
-function ReadyDashboard({ projection }: { projection: DashboardProjection }) {
+function ReadyDashboard({
+  projection,
+  onClearDemoChanges,
+}: {
+  projection: DashboardProjection;
+  onClearDemoChanges: () => void;
+}) {
   const completedAt = new Intl.DateTimeFormat(undefined, {
     dateStyle: "medium",
     timeStyle: "short",
@@ -284,7 +337,11 @@ function ReadyDashboard({ projection }: { projection: DashboardProjection }) {
     <div className="space-y-8 sm:space-y-10">
       <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <Badge className="bg-primary/10 text-primary">Stored extraction snapshot</Badge>
+          <Badge className="bg-primary/10 text-primary">
+            {projection.temporaryDecisionCount > 0
+              ? "Temporary demo review applied"
+              : "Stored extraction snapshot"}
+          </Badge>
           <PageTitle className="mt-3">ESG Dashboard</PageTitle>
           <Subtitle className="mt-1 max-w-3xl">
             Real indicators extracted from {projection.document.fileName}. Values are
@@ -343,49 +400,100 @@ function ReadyDashboard({ projection }: { projection: DashboardProjection }) {
         </CardContent>
       </ContentCard>
 
-      <div
-        className="flex gap-3 rounded-2xl border border-primary/20 bg-primary/[0.06] px-5 py-4 text-sm leading-6 text-foreground shadow-sm"
-        role="status"
-      >
-        <FileCheck2 className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden />
-        <p>
-          This dashboard shows the stored extraction snapshot. Temporary Demo Mode
-          decisions made on the Validation page are session-only and are not reflected
-          here.
-        </p>
-      </div>
+      {projection.temporaryDecisionCount > 0 ? (
+        <div
+          className="flex flex-col gap-3 rounded-2xl border border-primary/20 bg-primary/[0.06] px-5 py-4 text-sm leading-6 text-foreground shadow-sm sm:flex-row sm:items-center sm:justify-between"
+          role="status"
+        >
+          <div className="flex gap-3">
+            <FileCheck2 className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden />
+            <p>
+              <span className="font-semibold">Demo mode</span> — reviewed values and
+              statuses are temporary and not saved to Supabase.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="shrink-0 bg-background/80"
+            onClick={onClearDemoChanges}
+          >
+            <RotateCcw className="size-3.5" aria-hidden />
+            Clear demo changes
+          </Button>
+        </div>
+      ) : (
+        <div
+          className="flex gap-3 rounded-2xl border border-primary/20 bg-primary/[0.06] px-5 py-4 text-sm leading-6 text-foreground shadow-sm"
+          role="status"
+        >
+          <FileCheck2 className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden />
+          <p>
+            This dashboard shows the stored extraction snapshot. No temporary demo
+            review decisions are active for this document and extraction.
+          </p>
+        </div>
+      )}
 
-      <ContentCard>
-        <CardHeader>
-          <CardTitle className={design.type.cardTitle}>Extraction coverage</CardTitle>
-          <CardDescription>
-            Direct counts from the 12 supported ESG fields. No score, benchmark, or
-            compliance conclusion is calculated.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
-            {[
-              ["Total fields", projection.total],
-              ["Found", projection.found],
-              ["Not found", projection.notFound],
-              ["Pending", projection.pending],
-              ["Approved / edited", projection.approved + projection.edited],
-              ["Rejected", projection.rejected],
-            ].map(([label, value]) => (
-              <div
-                key={label}
-                className="rounded-xl border border-border/60 bg-muted/20 px-4 py-3"
-              >
-                <dt className="text-xs text-muted-foreground">{label}</dt>
-                <dd className="mt-1 text-2xl font-semibold tabular-nums text-foreground">
-                  {value}
-                </dd>
-              </div>
-            ))}
-          </dl>
-        </CardContent>
-      </ContentCard>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <ContentCard>
+          <CardHeader>
+            <CardTitle className={design.type.cardTitle}>Source coverage</CardTitle>
+            <CardDescription>
+              Found and not-found states from the immutable extraction source.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <dl className="grid grid-cols-3 gap-3">
+              {[
+                ["Total fields", projection.total],
+                ["Found", projection.found],
+                ["Not found", projection.notFound],
+              ].map(([label, value]) => (
+                <div
+                  key={label}
+                  className="rounded-xl border border-border/60 bg-muted/20 px-4 py-3"
+                >
+                  <dt className="text-xs text-muted-foreground">{label}</dt>
+                  <dd className="mt-1 text-2xl font-semibold tabular-nums text-foreground">
+                    {value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </CardContent>
+        </ContentCard>
+
+        <ContentCard>
+          <CardHeader>
+            <CardTitle className={design.type.cardTitle}>Demo review status</CardTitle>
+            <CardDescription>
+              Review decisions are counted separately from source coverage.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {[
+                ["Pending", projection.pending],
+                ["Approved", projection.approved],
+                ["Edited", projection.edited],
+                ["Rejected", projection.rejected],
+              ].map(([label, value]) => (
+                <div
+                  key={label}
+                  className="rounded-xl border border-border/60 bg-muted/20 px-4 py-3"
+                >
+                  <dt className="text-xs text-muted-foreground">{label}</dt>
+                  <dd className="mt-1 text-2xl font-semibold tabular-nums text-foreground">
+                    {value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </CardContent>
+        </ContentCard>
+      </div>
 
       {projection.categories.map((category) => (
         <CategorySection key={category.category} category={category} />
@@ -406,6 +514,7 @@ export function DashboardOverview({
   documentId,
   invalidDocumentId,
 }: DashboardOverviewProps) {
+  const { clearDecisions, getReviews } = useDemoReview();
   const [state, setState] = useState<ViewState>(() => {
     if (!documentId) {
       return invalidDocumentId
@@ -436,15 +545,29 @@ export function DashboardOverview({
   const projection = useMemo(() => {
     if (state.status !== "ready") return null;
     try {
-      return projectDashboardData(state.validation);
+      const scopeKey = getDemoReviewScope(
+        state.validation.document.id,
+        state.validation.extraction.id
+      );
+      return projectDashboardData(state.validation, getReviews(scopeKey));
     } catch {
       return null;
     }
-  }, [state]);
+  }, [getReviews, state]);
 
   if (state.status === "ready") {
     return projection ? (
-      <ReadyDashboard projection={projection} />
+      <ReadyDashboard
+        projection={projection}
+        onClearDemoChanges={() =>
+          clearDecisions(
+            getDemoReviewScope(
+              projection.document.id,
+              projection.extraction.id
+            )
+          )
+        }
+      />
     ) : (
       <StatusView state={{ status: "error", code: "invalid_projection" }} />
     );

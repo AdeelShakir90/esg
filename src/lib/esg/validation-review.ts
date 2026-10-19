@@ -16,6 +16,16 @@ export type DemoReviewSession = {
   reviews: DemoReviewState;
 };
 
+export type DemoReviewAction =
+  | {
+      type: "set";
+      scopeKey: string;
+      fieldId: string;
+      decision: DemoReviewDecision;
+    }
+  | { type: "reset"; scopeKey: string; fieldId: string }
+  | { type: "clear"; scopeKey: string };
+
 export function getDemoReviewScope(documentId: string, extractionId: string) {
   return `${documentId}:${extractionId}`;
 }
@@ -62,6 +72,34 @@ export function resetDemoReviewDecision(
   const nextReviews = { ...reviews };
   delete nextReviews[fieldId];
   return { scopeKey, reviews: nextReviews };
+}
+
+export function reduceDemoReviewSession(
+  session: DemoReviewSession | null,
+  action: DemoReviewAction
+): DemoReviewSession | null {
+  if (action.type === "set") {
+    return setDemoReviewDecision(
+      session ?? createDemoReviewSession(action.scopeKey),
+      action.scopeKey,
+      action.fieldId,
+      action.decision
+    );
+  }
+
+  if (!session || session.scopeKey !== action.scopeKey) {
+    return session;
+  }
+
+  if (action.type === "reset") {
+    return resetDemoReviewDecision(
+      session,
+      action.scopeKey,
+      action.fieldId
+    );
+  }
+
+  return null;
 }
 
 export type DemoEditedValueResult =

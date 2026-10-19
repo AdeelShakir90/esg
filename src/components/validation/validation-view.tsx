@@ -26,6 +26,7 @@ import {
   loadValidationData,
   type ValidationLoadErrorCode,
 } from "@/components/validation/validation-data-action";
+import { useDemoReview } from "@/components/validation/demo-review-provider";
 import type {
   ValidationData,
   ValidationField,
@@ -36,14 +37,10 @@ import {
   formatReportingPeriod,
 } from "@/lib/esg/validation-format";
 import {
-  createDemoReviewSession,
   getDemoReviewScope,
   getDemoReviewSummary,
   getEffectiveDemoReview,
-  getScopedDemoReviews,
   parseDemoEditedValue,
-  resetDemoReviewDecision,
-  setDemoReviewDecision,
   type DemoReviewDecision,
 } from "@/lib/esg/validation-review";
 import type { EsgFieldValue } from "@/lib/esg/schema";
@@ -454,10 +451,10 @@ function ReadyValidationView({ validation }: { validation: ValidationData }) {
     validation.document.id,
     validation.extraction.id
   );
-  const [reviewSession, setReviewSession] = useState(() =>
-    createDemoReviewSession(scopeKey)
-  );
-  const reviews = getScopedDemoReviews(reviewSession, scopeKey);
+  const { clearDecisions, getReviews, resetDecision, setDecision } =
+    useDemoReview();
+  const reviews = getReviews(scopeKey);
+  const hasDemoChanges = Object.keys(reviews).length > 0;
   const summary = getDemoReviewSummary(validation.fields, reviews);
   const groupedFields = useMemo(
     () => ({
@@ -488,12 +485,20 @@ function ReadyValidationView({ validation }: { validation: ValidationData }) {
                   session. Source values and evidence remain unchanged.
                 </p>
               </div>
-              <Link
-                href="/documents"
-                className={buttonVariants({ variant: "outline" })}
-              >
-                Back to Documents
-              </Link>
+              <div className="flex flex-wrap gap-2">
+                <Link
+                  href={`/dashboard?documentId=${encodeURIComponent(validation.document.id)}`}
+                  className={buttonVariants()}
+                >
+                  View dashboard
+                </Link>
+                <Link
+                  href="/documents"
+                  className={buttonVariants({ variant: "outline" })}
+                >
+                  Back to Documents
+                </Link>
+              </div>
             </div>
           </div>
 
@@ -537,14 +542,28 @@ function ReadyValidationView({ validation }: { validation: ValidationData }) {
         </ContentCard>
 
         <div
-          className="flex gap-3 rounded-2xl border border-primary/20 bg-primary/[0.06] px-5 py-4 text-sm text-foreground shadow-sm"
+          className="flex flex-col gap-3 rounded-2xl border border-primary/20 bg-primary/[0.06] px-5 py-4 text-sm text-foreground shadow-sm sm:flex-row sm:items-center sm:justify-between"
           role="status"
         >
-          <LockKeyhole className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden />
-          <p>
-            <span className="font-semibold">Demo mode</span> — review changes are
-            temporary and are not saved to Supabase.
-          </p>
+          <div className="flex gap-3">
+            <LockKeyhole className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden />
+            <p>
+              <span className="font-semibold">Demo mode</span> — review changes are
+              temporary and are not saved to Supabase.
+            </p>
+          </div>
+          {hasDemoChanges ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="shrink-0 bg-background/80"
+              onClick={() => clearDecisions(scopeKey)}
+            >
+              <RotateCcw className="size-3.5" aria-hidden />
+              Clear demo changes
+            </Button>
+          ) : null}
         </div>
 
         <ContentCard className="p-5 sm:p-6">
@@ -605,20 +624,9 @@ function ReadyValidationView({ validation }: { validation: ValidationData }) {
                     field={field}
                     decision={reviews[field.id]}
                     onDecision={(decision) =>
-                      setReviewSession((current) =>
-                        setDemoReviewDecision(
-                          current,
-                          scopeKey,
-                          field.id,
-                          decision
-                        )
-                      )
+                      setDecision(scopeKey, field.id, decision)
                     }
-                    onReset={() =>
-                      setReviewSession((current) =>
-                        resetDemoReviewDecision(current, scopeKey, field.id)
-                      )
-                    }
+                    onReset={() => resetDecision(scopeKey, field.id)}
                   />
                 ))}
               </div>

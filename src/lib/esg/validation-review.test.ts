@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import type { ValidationField } from "./validation";
@@ -9,6 +10,7 @@ import {
   getEffectiveDemoReview,
   getScopedDemoReviews,
   parseDemoEditedValue,
+  reduceDemoReviewSession,
   resetDemoReviewDecision,
   setDemoReviewDecision,
 } from "./validation-review";
@@ -140,4 +142,49 @@ test("summarizes effective backend and temporary review statuses", () => {
     rejected: 1,
     pending: 1,
   });
+});
+
+test("keeps decisions in memory across navigation and clears only the active scope", () => {
+  const scope = getDemoReviewScope("document-a", "extraction-a");
+  const staleScope = getDemoReviewScope("document-a", "extraction-b");
+  const initialSession = null;
+  const reviewedSession = reduceDemoReviewSession(initialSession, {
+    type: "set",
+    scopeKey: scope,
+    fieldId: FIELD_ID,
+    decision: { status: "approved", editedValue: null },
+  });
+
+  assert.equal(initialSession, null);
+  assert.equal(getScopedDemoReviews(reviewedSession!, scope)[FIELD_ID]?.status, "approved");
+  assert.deepEqual(getScopedDemoReviews(reviewedSession!, staleScope), {});
+  assert.equal(
+    reduceDemoReviewSession(reviewedSession, {
+      type: "clear",
+      scopeKey: staleScope,
+    }),
+    reviewedSession
+  );
+  assert.equal(
+    reduceDemoReviewSession(reviewedSession, {
+      type: "clear",
+      scopeKey: scope,
+    }),
+    null
+  );
+});
+
+test("shared demo review state has no browser or network persistence", () => {
+  const providerSource = readFileSync(
+    new URL(
+      "../../components/validation/demo-review-provider.tsx",
+      import.meta.url
+    ),
+    "utf8"
+  );
+
+  assert.doesNotMatch(
+    providerSource,
+    /localStorage|sessionStorage|indexedDB|document\.cookie|fetch\(|XMLHttpRequest|sendBeacon/
+  );
 });

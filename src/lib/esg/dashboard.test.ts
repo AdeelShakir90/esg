@@ -96,7 +96,8 @@ test("keeps not-found fields empty without inventing fallback data", () => {
   assert.equal(projection.categories[0].found, 7);
   assert.equal(projection.categories[0].notFound, 1);
   assert.equal(electricity.displayValue, "Not found");
-  assert.equal(electricity.value, null);
+  assert.equal(electricity.sourceValue, null);
+  assert.equal(electricity.effectiveValue, null);
   assert.equal(electricity.unit, null);
 });
 
@@ -123,6 +124,46 @@ test("rejects incomplete or duplicate dashboard field sets", () => {
   const duplicate = makeValidationData();
   duplicate.fields[11] = duplicate.fields[10];
   assert.throws(() => projectDashboardData(duplicate), /12 unique ESG fields/);
+});
+
+test("applies scoped demo reviews without changing source coverage or evidence", () => {
+  const validation = makeValidationData();
+  const editedField = validation.fields[0];
+  const approvedField = validation.fields[1];
+  const rejectedField = validation.fields[2];
+  const originalValue = structuredClone(editedField.value);
+  const originalEvidence = structuredClone(editedField.evidence);
+
+  const projection = projectDashboardData(validation, {
+    [editedField.id]: {
+      status: "edited",
+      editedValue: { type: "number", value: 999 },
+    },
+    [approvedField.id]: { status: "approved", editedValue: null },
+    [rejectedField.id]: { status: "rejected", editedValue: null },
+  });
+  const indicators = projection.categories.flatMap(
+    ({ indicators: categoryIndicators }) => categoryIndicators
+  );
+  const edited = indicators.find(({ id }) => id === editedField.id);
+  const rejected = indicators.find(({ id }) => id === rejectedField.id);
+
+  assert.equal(projection.found, 12);
+  assert.equal(projection.notFound, 0);
+  assert.equal(projection.edited, 1);
+  assert.equal(projection.approved, 1);
+  assert.equal(projection.rejected, 1);
+  assert.equal(projection.pending, 9);
+  assert.equal(projection.temporaryDecisionCount, 3);
+  assert.equal(edited?.displayValue, "999");
+  assert.equal(edited?.sourceDisplayValue, "10.5");
+  assert.equal(edited?.reviewStatus, "edited");
+  assert.equal(edited?.isTemporary, true);
+  assert.equal(rejected?.reviewStatus, "rejected");
+  assert.equal(rejected?.displayValue, rejected?.sourceDisplayValue);
+  assert.equal(rejected?.isTemporary, true);
+  assert.deepEqual(editedField.value, originalValue);
+  assert.deepEqual(editedField.evidence, originalEvidence);
 });
 
 test("accepts only one valid document UUID query value", () => {
