@@ -6,6 +6,7 @@ import {
   AlertCircle,
   ArrowRight,
   CheckCircle2,
+  Download,
   FileSearch,
   FileText,
   Loader2,
@@ -16,6 +17,7 @@ import {
 
 import { ContentCard } from "@/components/primitives";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { useDemoReview } from "@/components/validation/demo-review-provider";
 import {
@@ -28,6 +30,7 @@ import {
   type EsgReportProjection,
   type ReportSection,
 } from "@/lib/esg/report";
+import { createEsgReportSnapshot } from "@/lib/esg/report-export";
 import type { ValidationData } from "@/lib/esg/validation";
 import { getDemoReviewScope } from "@/lib/esg/validation-review";
 import { cn } from "@/lib/utils";
@@ -134,14 +137,20 @@ function StatusView({ state }: { state: Exclude<ViewState, { status: "ready" }> 
         <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-muted-foreground">
           {content.message}
         </p>
-        {!loading && (
-          <Link
-            href="/documents"
-            className={cn(buttonVariants({ variant: "outline" }), "mt-6")}
-          >
-            Go to Documents
-          </Link>
-        )}
+        <div className="mt-6 flex flex-wrap justify-center gap-2">
+          {!loading && (
+            <Link
+              href="/documents"
+              className={buttonVariants({ variant: "outline" })}
+            >
+              Go to Documents
+            </Link>
+          )}
+          <Button variant="outline" disabled>
+            <Download className="size-4" aria-hidden />
+            Download Draft PDF
+          </Button>
+        </div>
       </ContentCard>
     </div>
   );
@@ -337,6 +346,25 @@ function SummaryCard({
 }
 
 function ReadyReport({ report }: { report: EsgReportProjection }) {
+  const [downloadState, setDownloadState] = useState<
+    "idle" | "generating" | "error"
+  >("idle");
+
+  async function handleDownload() {
+    if (downloadState === "generating") return;
+
+    setDownloadState("generating");
+    const snapshot = createEsgReportSnapshot(report, new Date().toISOString());
+
+    try {
+      const { downloadEsgReportPdf } = await import("./report-pdf-download");
+      await downloadEsgReportPdf(snapshot);
+      setDownloadState("idle");
+    } catch {
+      setDownloadState("error");
+    }
+  }
+
   return (
     <div className="mx-auto w-full max-w-7xl space-y-8 sm:space-y-10">
       <header className="flex flex-col gap-6 border-b border-border/60 pb-8 lg:flex-row lg:items-end lg:justify-between">
@@ -349,23 +377,44 @@ function ReadyReport({ report }: { report: EsgReportProjection }) {
             Document-scoped preview of extracted ESG indicators and current temporary review decisions.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Link
-            href={`/validation?documentId=${encodeURIComponent(report.document.id)}`}
-            className={buttonVariants()}
-          >
-            Review ESG data
-            <ArrowRight className="size-4" aria-hidden />
-          </Link>
-          <Link
-            href={`/dashboard?documentId=${encodeURIComponent(report.document.id)}`}
-            className={buttonVariants({ variant: "outline" })}
-          >
-            Dashboard
-          </Link>
-          <Link href="/documents" className={buttonVariants({ variant: "outline" })}>
-            Documents
-          </Link>
+        <div className="flex flex-col items-start gap-2 lg:items-end">
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              onClick={handleDownload}
+              disabled={downloadState === "generating"}
+            >
+              {downloadState === "generating" ? (
+                <Loader2 className="size-4 animate-spin" aria-hidden />
+              ) : (
+                <Download className="size-4" aria-hidden />
+              )}
+              {downloadState === "generating"
+                ? "Generating PDF..."
+                : "Download Draft PDF"}
+            </Button>
+            <Link
+              href={`/validation?documentId=${encodeURIComponent(report.document.id)}`}
+              className={buttonVariants({ variant: "outline" })}
+            >
+              Review ESG data
+              <ArrowRight className="size-4" aria-hidden />
+            </Link>
+            <Link
+              href={`/dashboard?documentId=${encodeURIComponent(report.document.id)}`}
+              className={buttonVariants({ variant: "outline" })}
+            >
+              Dashboard
+            </Link>
+            <Link href="/documents" className={buttonVariants({ variant: "outline" })}>
+              Documents
+            </Link>
+          </div>
+          {downloadState === "error" ? (
+            <p className="text-sm text-destructive" role="alert">
+              PDF generation failed. Please try again.
+            </p>
+          ) : null}
         </div>
       </header>
 
