@@ -5,6 +5,11 @@ import { projectDashboardData } from "./dashboard";
 import { ESG_FIELD_DEFINITIONS } from "./definitions";
 import type { ValidationData, ValidationField } from "./validation";
 import { parseValidationDocumentId } from "./validation-format";
+import {
+  createDemoReviewSession,
+  getDemoReviewScope,
+  setDemoReviewDecision,
+} from "./validation-review";
 
 const DOCUMENT_ID = "9c388a00-af6a-427e-a880-a1215e332267";
 const EXTRACTION_ID = "d2a9f734-4d8e-460d-b416-5cdd4762ab2d";
@@ -126,22 +131,35 @@ test("rejects incomplete or duplicate dashboard field sets", () => {
   assert.throws(() => projectDashboardData(duplicate), /12 unique ESG fields/);
 });
 
-test("applies scoped demo reviews without changing source coverage or evidence", () => {
+test("carries a scoped edited value to the dashboard without changing source data", () => {
   const validation = makeValidationData();
   const editedField = validation.fields[0];
+  editedField.value = { type: "number", value: 1240 };
+  editedField.unit = "MWh";
   const approvedField = validation.fields[1];
   const rejectedField = validation.fields[2];
   const originalValue = structuredClone(editedField.value);
   const originalEvidence = structuredClone(editedField.evidence);
-
-  const projection = projectDashboardData(validation, {
-    [editedField.id]: {
+  const scope = getDemoReviewScope(DOCUMENT_ID, EXTRACTION_ID);
+  let session = setDemoReviewDecision(
+    createDemoReviewSession(scope),
+    scope,
+    editedField.id,
+    {
       status: "edited",
-      editedValue: { type: "number", value: 999 },
-    },
-    [approvedField.id]: { status: "approved", editedValue: null },
-    [rejectedField.id]: { status: "rejected", editedValue: null },
+      editedValue: { type: "number", value: 1250 },
+    }
+  );
+  session = setDemoReviewDecision(session, scope, approvedField.id, {
+    status: "approved",
+    editedValue: null,
   });
+  session = setDemoReviewDecision(session, scope, rejectedField.id, {
+    status: "rejected",
+    editedValue: null,
+  });
+
+  const projection = projectDashboardData(validation, session.reviews);
   const indicators = projection.categories.flatMap(
     ({ indicators: categoryIndicators }) => categoryIndicators
   );
@@ -155,8 +173,9 @@ test("applies scoped demo reviews without changing source coverage or evidence",
   assert.equal(projection.rejected, 1);
   assert.equal(projection.pending, 9);
   assert.equal(projection.temporaryDecisionCount, 3);
-  assert.equal(edited?.displayValue, "999");
-  assert.equal(edited?.sourceDisplayValue, "10.5");
+  assert.equal(edited?.displayValue, "1,250");
+  assert.equal(edited?.sourceDisplayValue, "1,240");
+  assert.equal(edited?.unit, "MWh");
   assert.equal(edited?.reviewStatus, "edited");
   assert.equal(edited?.isTemporary, true);
   assert.equal(rejected?.reviewStatus, "rejected");

@@ -162,9 +162,11 @@ function FieldCard({
   const confidence = formatConfidence(field.confidence);
   const reportingPeriod = formatReportingPeriod(field);
   const effectiveReview = getEffectiveDemoReview(field, decision);
+  const hasActiveEdit = decision?.status === "edited";
   const [editing, setEditing] = useState(false);
   const [draftValue, setDraftValue] = useState<string | boolean | null>("");
   const [editError, setEditError] = useState<string | null>(null);
+  const statusChangeDisabled = editing || hasActiveEdit;
 
   function beginEdit() {
     const currentValue = effectiveReview.value;
@@ -343,7 +345,7 @@ function FieldCard({
           <div className="mt-3 flex flex-wrap gap-2">
             <Button type="button" size="sm" onClick={saveEdit}>
               <Save className="size-3.5" aria-hidden />
-              Use temporary value
+              Confirm edit
             </Button>
             <Button
               type="button"
@@ -365,6 +367,8 @@ function FieldCard({
           type="button"
           size="sm"
           variant="outline"
+          disabled={statusChangeDisabled}
+          aria-describedby={statusChangeDisabled ? `${field.id}-edited-guidance` : undefined}
           onClick={() =>
             finishDecision({ status: "approved", editedValue: null })
           }
@@ -380,6 +384,8 @@ function FieldCard({
           type="button"
           size="sm"
           variant="destructive"
+          disabled={statusChangeDisabled}
+          aria-describedby={statusChangeDisabled ? `${field.id}-edited-guidance` : undefined}
           onClick={() =>
             finishDecision({ status: "rejected", editedValue: null })
           }
@@ -402,6 +408,16 @@ function FieldCard({
           Reset
         </Button>
       </div>
+      {statusChangeDisabled && (
+        <p
+          id={`${field.id}-edited-guidance`}
+          className="mt-2 text-xs leading-5 text-muted-foreground"
+        >
+          {hasActiveEdit
+            ? "The corrected value is active. Reset it before approving or rejecting the original AI value."
+            : "Confirm or cancel the edit before choosing another review status."}
+        </p>
+      )}
     </article>
   );
 }

@@ -68,6 +68,80 @@ test("applies approve, reject, edit, and reset transitions without mutating sour
   assert.equal(getEffectiveDemoReview(source, undefined).status, "pending");
 });
 
+test("keeps a confirmed edit active until reset and isolates other field decisions", () => {
+  const electricity = field();
+  const approvedField = field({
+    id: "10000000-0000-4000-8000-000000000002",
+    key: "natural_gas_consumption",
+    label: "Natural gas consumption",
+  });
+  const rejectedField = field({
+    id: "10000000-0000-4000-8000-000000000003",
+    key: "scope_1_emissions",
+    label: "Scope 1 emissions",
+  });
+  const scope = getDemoReviewScope("document-a", "extraction-a");
+  let session = setDemoReviewDecision(
+    createDemoReviewSession(scope),
+    scope,
+    electricity.id,
+    { status: "edited", editedValue: { type: "number", value: 1250 } }
+  );
+
+  session = setDemoReviewDecision(session, scope, electricity.id, {
+    status: "approved",
+    editedValue: null,
+  });
+  session = setDemoReviewDecision(session, scope, approvedField.id, {
+    status: "approved",
+    editedValue: null,
+  });
+  session = setDemoReviewDecision(session, scope, rejectedField.id, {
+    status: "rejected",
+    editedValue: null,
+  });
+
+  assert.deepEqual(session.reviews[electricity.id], {
+    status: "edited",
+    editedValue: { type: "number", value: 1250 },
+  });
+  assert.deepEqual(getDemoReviewSummary(
+    [electricity, approvedField, rejectedField],
+    session.reviews
+  ), {
+    total: 3,
+    approved: 1,
+    edited: 1,
+    rejected: 1,
+    pending: 0,
+  });
+  assert.deepEqual(electricity.value, { type: "number", value: 1240 });
+  assert.equal(electricity.evidence.quote, "Synthetic evidence");
+
+  session = resetDemoReviewDecision(session, scope, electricity.id);
+  session = setDemoReviewDecision(session, scope, electricity.id, {
+    status: "approved",
+    editedValue: null,
+  });
+  session = setDemoReviewDecision(session, scope, electricity.id, {
+    status: "edited",
+    editedValue: { type: "number", value: 1250 },
+  });
+
+  assert.equal(session.reviews[electricity.id]?.status, "edited");
+  assert.deepEqual(session.reviews[electricity.id]?.editedValue, {
+    type: "number",
+    value: 1250,
+  });
+
+  session = resetDemoReviewDecision(session, scope, electricity.id);
+  assert.deepEqual(getEffectiveDemoReview(electricity, session.reviews[electricity.id]), {
+    status: "pending",
+    value: { type: "number", value: 1240 },
+    isTemporary: false,
+  });
+});
+
 test("validates numeric, integer, percentage, and boolean edits", () => {
   assert.deepEqual(parseDemoEditedValue("electricity_consumption", "12.5"), {
     success: true,
@@ -174,6 +248,23 @@ test("keeps decisions in memory across navigation and clears only the active sco
   );
 });
 
+test("a fresh provider session after refresh contains no demo decisions", () => {
+  const scope = getDemoReviewScope("document-a", "extraction-a");
+  const reviewedSession = reduceDemoReviewSession(null, {
+    type: "set",
+    scopeKey: scope,
+    fieldId: FIELD_ID,
+    decision: {
+      status: "edited",
+      editedValue: { type: "number", value: 1250 },
+    },
+  });
+  const refreshedSession = null;
+
+  assert.equal(getScopedDemoReviews(reviewedSession!, scope)[FIELD_ID]?.status, "edited");
+  assert.equal(refreshedSession, null);
+});
+
 test("shared demo review state has no browser or network persistence", () => {
   const providerSource = readFileSync(
     new URL(
@@ -187,4 +278,18 @@ test("shared demo review state has no browser or network persistence", () => {
     providerSource,
     /localStorage|sessionStorage|indexedDB|document\.cookie|fetch\(|XMLHttpRequest|sendBeacon/
   );
+});
+
+test("validation UI requires edits to be confirmed before changing review status", () => {
+  const validationViewSource = readFileSync(
+    new URL(
+      "../../components/validation/validation-view.tsx",
+      import.meta.url
+    ),
+    "utf8"
+  );
+
+  assert.match(validationViewSource, /Confirm edit/);
+  assert.match(validationViewSource, /statusChangeDisabled = editing \|\| hasActiveEdit/);
+  assert.match(validationViewSource, /Reset it before approving or rejecting/);
 });

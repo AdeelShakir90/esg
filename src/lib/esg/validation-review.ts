@@ -48,6 +48,17 @@ export function setDemoReviewDecision(
   decision: DemoReviewDecision
 ): DemoReviewSession {
   const reviews = getScopedDemoReviews(session, scopeKey);
+  const currentDecision = reviews[fieldId];
+
+  // A confirmed edit is itself the active review decision. Reset it explicitly
+  // before approving or rejecting the original AI-extracted value.
+  if (
+    currentDecision?.status === "edited" &&
+    decision.status !== "edited"
+  ) {
+    return session;
+  }
+
   return {
     scopeKey,
     reviews: {
