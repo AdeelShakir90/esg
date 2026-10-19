@@ -362,6 +362,13 @@ function ReadyDashboard({
             Review ESG data
             <ArrowRight className="size-4" aria-hidden />
           </Link>
+          <Link
+            href={`/reports?documentId=${encodeURIComponent(projection.document.id)}`}
+            className={buttonVariants({ variant: "outline" })}
+          >
+            View report
+            <FileText className="size-4" aria-hidden />
+          </Link>
         </div>
       </div>
 
