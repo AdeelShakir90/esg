@@ -693,6 +693,18 @@ function StoredDocument({
               <ArrowRight className="size-3.5" aria-hidden />
             </Link>
           )}
+          {canExtractEsg && !isExtractingEsg && (
+            <Link
+              href={`/dashboard?documentId=${encodeURIComponent(document.id)}`}
+              className={cn(
+                buttonVariants({ variant: "outline", size: "sm" }),
+                "flex-1 sm:flex-none"
+              )}
+            >
+              View dashboard
+              <ArrowRight className="size-3.5" aria-hidden />
+            </Link>
+          )}
           <Button
             type="button"
             variant="ghost"
