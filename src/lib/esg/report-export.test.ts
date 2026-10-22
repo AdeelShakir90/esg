@@ -5,6 +5,7 @@ import { ESG_FIELD_DEFINITIONS } from "./definitions";
 import {
   createEsgReportFileName,
   createEsgReportSnapshot,
+  formatReportTimestamp,
 } from "./report-export";
 import { projectEsgReport } from "./report";
 import type { ValidationData, ValidationField } from "./validation";
@@ -116,4 +117,15 @@ test("creates a bounded safe PDF filename from long and Unicode source names", (
   assert.equal(fileName.includes(".."), false);
   assert.equal(fileName.includes("/"), false);
   assert.equal(fileName.includes("\\"), false);
+});
+
+test("uses the same explicit Vienna timestamp format for preview and PDF", () => {
+  assert.equal(
+    formatReportTimestamp("2026-10-19T12:34:56.000Z"),
+    "19 Oct 2026, 14:34"
+  );
+  assert.throws(
+    () => formatReportTimestamp("not-a-date"),
+    /valid report timestamp/
+  );
 });

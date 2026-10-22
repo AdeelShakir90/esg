@@ -8,7 +8,17 @@ import {
 } from "@react-pdf/renderer";
 
 import type { EffectiveEsgField } from "@/lib/esg/effective-fields";
-import type { EsgReportSnapshot } from "@/lib/esg/report-export";
+import {
+  formatReportTimestamp,
+  type EsgReportSnapshot,
+} from "@/lib/esg/report-export";
+import {
+  PDF_UNSUPPORTED_TEXT_NOTICE,
+  sanitizePdfText,
+  splitPdfTextRuns,
+} from "@/lib/esg/report-pdf-text";
+
+Font.registerHyphenationCallback((word) => [word]);
 
 const colors = {
   navy: "#14243A",
@@ -23,29 +33,25 @@ const colors = {
   white: "#FFFFFF",
 } as const;
 
-Font.registerHyphenationCallback((word) => [word]);
-
 const styles = StyleSheet.create({
   page: {
     backgroundColor: colors.white,
     color: colors.ink,
-    fontFamily: "Helvetica",
+    fontFamily: "Noto Sans",
     fontSize: 9,
     lineHeight: 1.45,
-    paddingTop: 24,
-    paddingRight: 42,
-    paddingBottom: 20,
-    paddingLeft: 42,
   },
-  pageFrame: {
-    display: "flex",
-    flexDirection: "column",
-    height: 796,
+  pageLayout: {
+    flexGrow: 1,
+    paddingTop: 58,
+    paddingRight: 42,
+    paddingBottom: 18,
+    paddingLeft: 42,
   },
   coverPage: {
     backgroundColor: colors.navy,
     color: colors.white,
-    fontFamily: "Helvetica",
+    fontFamily: "Noto Sans",
     paddingTop: 54,
     paddingRight: 48,
     paddingBottom: 48,
@@ -58,17 +64,22 @@ const styles = StyleSheet.create({
     display: "flex",
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 16,
+    left: 42,
     paddingBottom: 8,
+    position: "absolute",
+    right: 42,
+    top: 24,
   },
   headerBrand: {
     color: colors.green,
-    fontFamily: "Helvetica-Bold",
+    fontFamily: "Noto Sans",
+    fontWeight: 700,
     fontSize: 11,
   },
   headerDraft: {
     color: colors.muted,
-    fontFamily: "Helvetica-Bold",
+    fontFamily: "Noto Sans",
+    fontWeight: 700,
     fontSize: 7,
     letterSpacing: 1.2,
   },
@@ -79,30 +90,20 @@ const styles = StyleSheet.create({
     display: "flex",
     flexDirection: "row",
     justifyContent: "space-between",
-    marginTop: "auto",
+    marginTop: 12,
     paddingTop: 7,
-  },
-  body: {
-    display: "flex",
-    flexDirection: "column",
-    flexGrow: 1,
-  },
-  content: {
-    flexGrow: 1,
   },
   footerText: {
     color: colors.muted,
     fontSize: 6.8,
-  },
-  categoryFooter: {
-    justifyContent: "flex-end",
   },
   watermark: {
     position: "absolute",
     top: "43%",
     left: "18%",
     color: "#E7F0EC",
-    fontFamily: "Helvetica-Bold",
+    fontFamily: "Noto Sans",
+    fontWeight: 700,
     fontSize: 60,
     letterSpacing: 8,
     opacity: 0.28,
@@ -115,7 +116,8 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   coverBrand: {
-    fontFamily: "Helvetica-Bold",
+    fontFamily: "Noto Sans",
+    fontWeight: 700,
     fontSize: 20,
   },
   coverBadge: {
@@ -123,7 +125,8 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     color: "#A4E6CD",
-    fontFamily: "Helvetica-Bold",
+    fontFamily: "Noto Sans",
+    fontWeight: 700,
     fontSize: 8,
     letterSpacing: 1.2,
     paddingHorizontal: 10,
@@ -138,13 +141,15 @@ const styles = StyleSheet.create({
   },
   coverEyebrow: {
     color: "#8EDBBE",
-    fontFamily: "Helvetica-Bold",
+    fontFamily: "Noto Sans",
+    fontWeight: 700,
     fontSize: 9,
     letterSpacing: 1.8,
     marginTop: 26,
   },
   coverTitle: {
-    fontFamily: "Helvetica-Bold",
+    fontFamily: "Noto Sans",
+    fontWeight: 700,
     fontSize: 34,
     lineHeight: 1.1,
     marginTop: 14,
@@ -185,7 +190,8 @@ const styles = StyleSheet.create({
   },
   coverMetaValue: {
     color: colors.white,
-    fontFamily: "Helvetica-Bold",
+    fontFamily: "Noto Sans",
+    fontWeight: 700,
     fontSize: 9,
     flexShrink: 1,
     width: 330,
@@ -211,7 +217,8 @@ const styles = StyleSheet.create({
   },
   sectionEyebrow: {
     color: colors.green,
-    fontFamily: "Helvetica-Bold",
+    fontFamily: "Noto Sans",
+    fontWeight: 700,
     fontSize: 7,
     letterSpacing: 1.3,
     marginBottom: 4,
@@ -219,7 +226,8 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     color: colors.navy,
-    fontFamily: "Helvetica-Bold",
+    fontFamily: "Noto Sans",
+    fontWeight: 700,
     fontSize: 17,
     lineHeight: 1.2,
     marginBottom: 7,
@@ -251,7 +259,8 @@ const styles = StyleSheet.create({
   },
   metaValue: {
     color: colors.navy,
-    fontFamily: "Helvetica-Bold",
+    fontFamily: "Noto Sans",
+    fontWeight: 700,
     fontSize: 8.5,
   },
   notice: {
@@ -280,7 +289,8 @@ const styles = StyleSheet.create({
   },
   summaryNumber: {
     color: colors.navy,
-    fontFamily: "Helvetica-Bold",
+    fontFamily: "Noto Sans",
+    fontWeight: 700,
     fontSize: 18,
   },
   summaryLabel: {
@@ -300,12 +310,14 @@ const styles = StyleSheet.create({
   },
   categoryTitle: {
     color: colors.navy,
-    fontFamily: "Helvetica-Bold",
+    fontFamily: "Noto Sans",
+    fontWeight: 700,
     fontSize: 15,
   },
   categoryBrand: {
     color: colors.green,
-    fontFamily: "Helvetica-Bold",
+    fontFamily: "Noto Sans",
+    fontWeight: 700,
     fontSize: 6.5,
     letterSpacing: 1,
     marginBottom: 5,
@@ -333,7 +345,8 @@ const styles = StyleSheet.create({
   },
   indicatorLabel: {
     color: colors.navy,
-    fontFamily: "Helvetica-Bold",
+    fontFamily: "Noto Sans",
+    fontWeight: 700,
     fontSize: 10,
     maxWidth: "62%",
   },
@@ -341,7 +354,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.paleGreen,
     borderRadius: 8,
     color: colors.teal,
-    fontFamily: "Helvetica-Bold",
+    fontFamily: "Noto Sans",
+    fontWeight: 700,
     fontSize: 6.5,
     paddingHorizontal: 7,
     paddingVertical: 3,
@@ -352,7 +366,8 @@ const styles = StyleSheet.create({
   },
   indicatorValue: {
     color: colors.navy,
-    fontFamily: "Helvetica-Bold",
+    fontFamily: "Noto Sans",
+    fontWeight: 700,
     fontSize: 16,
     marginTop: 8,
   },
@@ -404,7 +419,8 @@ const styles = StyleSheet.create({
   },
   attentionTitle: {
     color: colors.navy,
-    fontFamily: "Helvetica-Bold",
+    fontFamily: "Noto Sans",
+    fontWeight: 700,
     fontSize: 9,
   },
   attentionReason: {
@@ -424,7 +440,8 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     borderWidth: 1,
     color: "#7B2F2F",
-    fontFamily: "Helvetica-Bold",
+    fontFamily: "Noto Sans",
+    fontWeight: 700,
     fontSize: 8.5,
     lineHeight: 1.5,
     marginTop: 10,
@@ -432,15 +449,20 @@ const styles = StyleSheet.create({
   },
 });
 
-function pdfText(value: string) {
-  return value
-    .replace(/[\u2011\u2013\u2014]/g, "-")
-    .replace(/\u2082/g, "2")
-    .replace(/\u00b7/g, "-");
+function PdfText({ value }: { value: string }) {
+  return (
+    <>
+      {splitPdfTextRuns(value).map((run, index) => (
+        <Text key={`${index}-${run.fontFamily}`} style={{ fontFamily: run.fontFamily }}>
+          {run.text}
+        </Text>
+      ))}
+    </>
+  );
 }
 
 function breakLongText(value: string) {
-  return pdfText(value)
+  return sanitizePdfText(value)
     .split(/(\s+)/)
     .map((part) =>
       /^\s+$/.test(part)
@@ -448,14 +470,6 @@ function breakLongText(value: string) {
         : part.match(/.{1,28}/g)?.join("\n") ?? part
     )
     .join("");
-}
-
-function formatTimestamp(value: string) {
-  return new Intl.DateTimeFormat("en-GB", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "Europe/Vienna",
-  }).format(new Date(value));
 }
 
 function reviewLabel(field: EffectiveEsgField) {
@@ -492,7 +506,9 @@ function Indicator({ field }: { field: EffectiveEsgField }) {
       style={[styles.indicatorCard, rejected ? styles.indicatorRejected : {}]}
     >
       <View style={styles.indicatorTop}>
-        <Text style={styles.indicatorLabel}>{pdfText(field.label)}</Text>
+        <Text style={styles.indicatorLabel}>
+          <PdfText value={field.label} />
+        </Text>
         <Text
           style={[
             styles.statusPill,
@@ -502,7 +518,9 @@ function Indicator({ field }: { field: EffectiveEsgField }) {
           {reviewLabel(field)}
         </Text>
       </View>
-      <Text style={styles.indicatorValue}>{pdfText(value)}</Text>
+      <Text style={styles.indicatorValue}>
+        <PdfText value={value} />
+      </Text>
       <Text style={styles.indicatorSubline}>
         {missing
           ? "Not found in the source document"
@@ -517,8 +535,9 @@ function Indicator({ field }: { field: EffectiveEsgField }) {
 
       {field.reviewStatus === "edited" ? (
         <Text style={styles.originalValue}>
-          Original AI value: {pdfText(field.sourceDisplayValue)}
-          {field.sourceValue && field.unit ? ` ${pdfText(field.unit)}` : ""}
+          <PdfText
+            value={`Original AI value: ${field.sourceDisplayValue}${field.sourceValue && field.unit ? ` ${field.unit}` : ""}`}
+          />
         </Text>
       ) : null}
 
@@ -532,7 +551,7 @@ function Indicator({ field }: { field: EffectiveEsgField }) {
         <View style={styles.detailItem}>
           <Text style={styles.detailLabel}>Reporting period</Text>
           <Text style={styles.detailValue}>
-            {pdfText(field.reportingPeriod ?? "Not specified")}
+            <PdfText value={field.reportingPeriod ?? "Not specified"} />
           </Text>
         </View>
         <View style={styles.detailItem}>
@@ -545,7 +564,7 @@ function Indicator({ field }: { field: EffectiveEsgField }) {
 
       {field.evidence.quote ? (
         <Text style={styles.evidence}>
-          Source evidence: {pdfText(field.evidence.quote)}
+          <PdfText value={`Source evidence: ${field.evidence.quote}`} />
         </Text>
       ) : null}
     </View>
@@ -555,7 +574,7 @@ function Indicator({ field }: { field: EffectiveEsgField }) {
 function CoverPage({ report }: { report: EsgReportSnapshot }) {
   const rows = [
     ["Source PDF", report.document.fileName],
-    ["Generated", formatTimestamp(report.generatedAt)],
+    ["Generated", formatReportTimestamp(report.generatedAt)],
     [
       "Reporting period",
       report.commonReportingPeriod ??
@@ -588,47 +607,65 @@ function CoverPage({ report }: { report: EsgReportSnapshot }) {
             ]}
           >
             <Text style={styles.coverMetaLabel}>{label}</Text>
-            <Text style={styles.coverMetaValue}>{breakLongText(value)}</Text>
+            <Text style={styles.coverMetaValue}>
+              <PdfText value={breakLongText(value)} />
+            </Text>
           </View>
         ))}
       </View>
       <Text style={styles.coverDisclaimer}>
-        {pdfText(report.disclaimer)} Temporary demo review decisions are held only in browser memory and are not saved to Supabase.
+        <PdfText
+          value={`${report.disclaimer} Temporary demo review decisions are held only in browser memory and are not saved to Supabase.`}
+        />
       </Text>
-      <Text style={styles.coverPageNumber}>Page 1 of 8</Text>
+      <Text
+        fixed
+        style={styles.coverPageNumber}
+        render={({ pageNumber, totalPages }) =>
+          `Page ${pageNumber} of ${totalPages}`
+        }
+      />
     </Page>
+  );
+}
+
+type BodyPageLayoutProps = Parameters<
+  NonNullable<React.ComponentProps<typeof Page>["layout"]>
+>[0];
+
+function bodyPageLayout({
+  children,
+  pageNumber,
+  totalPages,
+}: BodyPageLayoutProps) {
+  return (
+    <View style={styles.pageLayout}>
+      <Text style={styles.watermark}>DRAFT</Text>
+      {children}
+      <View style={styles.footer}>
+        <Text style={styles.footerText}>Draft ESG data report - not certified</Text>
+        <Text style={styles.footerText}>
+          Page {pageNumber} of {totalPages}
+        </Text>
+      </View>
+    </View>
   );
 }
 
 function BodyPage({
   children,
-  category = false,
-  pageNumber,
+  pageKey,
 }: {
   children: React.ReactNode;
-  category?: boolean;
-  pageNumber: number;
+  pageKey: string;
 }) {
   return (
-    <Page key={`page-${pageNumber}`} size="A4" style={styles.page} wrap>
-      <View style={styles.pageFrame}>
-        <View style={styles.body}>
-          <Text style={styles.watermark}>DRAFT</Text>
-          {category ? null : (
-            <View style={styles.header}>
-              <Text style={styles.headerBrand}>envario</Text>
-              <Text style={styles.headerDraft}>DRAFT ESG DATA REPORT</Text>
-            </View>
-          )}
-          <View style={styles.content}>{children}</View>
-          <View style={[styles.footer, category ? styles.categoryFooter : {}]}>
-            {category ? null : (
-              <Text style={styles.footerText}>Draft ESG data report - not certified</Text>
-            )}
-            <Text style={styles.footerText}>Page {pageNumber} of 8</Text>
-          </View>
-        </View>
+    <Page key={pageKey} layout={bodyPageLayout} size="A4" style={styles.page} wrap>
+      <View fixed style={styles.header}>
+        <Text style={styles.headerBrand}>envario</Text>
+        <Text style={styles.headerDraft}>DRAFT ESG DATA REPORT</Text>
       </View>
+      {children}
     </Page>
   );
 }
@@ -684,10 +721,10 @@ function BodyPages({ report }: { report: EsgReportSnapshot }) {
     throw new Error("The report snapshot must contain all ESG categories.");
   }
 
-  return (
-    <>
-      <BodyPage key="overview-page" pageNumber={2}>
-
+  return BodyPage({
+    pageKey: "report-body",
+    children: (
+      <>
       <View style={styles.section}>
         <Text style={styles.sectionEyebrow}>Report scope</Text>
         <Text style={styles.sectionTitle}>Source and methodology</Text>
@@ -699,27 +736,33 @@ function BodyPages({ report }: { report: EsgReportSnapshot }) {
       <View style={styles.metadataGrid}>
         <View style={styles.metadataItem}>
           <Text style={styles.metaLabel}>Source PDF</Text>
-          <Text style={styles.metaValue}>{breakLongText(report.document.fileName)}</Text>
+          <Text style={styles.metaValue}>
+            <PdfText value={breakLongText(report.document.fileName)} />
+          </Text>
         </View>
         <View style={styles.metadataItem}>
           <Text style={styles.metaLabel}>Extraction schema</Text>
-          <Text style={styles.metaValue}>{pdfText(report.extraction.schemaVersion)}</Text>
+          <Text style={styles.metaValue}>
+            <PdfText value={report.extraction.schemaVersion} />
+          </Text>
         </View>
         <View style={styles.metadataItem}>
           <Text style={styles.metaLabel}>Extraction completed</Text>
           <Text style={styles.metaValue}>
-            {formatTimestamp(report.extraction.completedAt)}
+            {formatReportTimestamp(report.extraction.completedAt)}
           </Text>
         </View>
         <View style={styles.metadataItem}>
           <Text style={styles.metaLabel}>Reporting period</Text>
           <Text style={styles.metaValue}>
-            {pdfText(
-              report.commonReportingPeriod ??
+            <PdfText
+              value={
+                report.commonReportingPeriod ??
                 (report.hasMixedReportingPeriods
                   ? "Multiple field-specific periods"
                   : "Not specified")
-            )}
+              }
+            />
           </Text>
         </View>
       </View>
@@ -749,25 +792,23 @@ function BodyPages({ report }: { report: EsgReportSnapshot }) {
           <SummaryBox label="Rejected" value={report.rejected} />
         </View>
       </View>
-      </BodyPage>
-
-      <BodyPage key="environmental-page-1" pageNumber={3} category>
+      <View break>
         <CategoryContent
           report={report}
           category={environmental}
           fields={environmental.fields.slice(0, 3)}
           part="Part 1"
         />
-      </BodyPage>
-      <BodyPage key="environmental-page-2" pageNumber={4} category>
+      </View>
+      <View break>
         <CategoryContent
           report={report}
           category={environmental}
           fields={environmental.fields.slice(3, 6)}
           part="Part 2"
         />
-      </BodyPage>
-      <BodyPage key="environmental-page-3" pageNumber={5} category>
+      </View>
+      <View break>
         <CategoryContent
           report={report}
           category={environmental}
@@ -775,40 +816,48 @@ function BodyPages({ report }: { report: EsgReportSnapshot }) {
           part="Part 3"
           topInset={24}
         />
-      </BodyPage>
-      <BodyPage key="social-page" pageNumber={6} category>
+      </View>
+      <View break>
         <CategoryContent
           report={report}
           category={social}
           fields={social.fields}
         />
-      </BodyPage>
-      <BodyPage key="governance-page" pageNumber={7} category>
+      </View>
+      <View break>
         <CategoryContent
           report={report}
           category={governance}
           fields={governance.fields}
           topInset={24}
         />
-      </BodyPage>
+      </View>
 
-      <BodyPage key="traceability-page" pageNumber={8}>
+      <View break>
         <View style={styles.section}>
-        <Text style={styles.sectionEyebrow}>Traceability</Text>
-        <Text style={styles.sectionTitle}>Missing, pending and rejected indicators</Text>
+        <View minPresenceAhead={80}>
+          <Text style={styles.sectionEyebrow}>Traceability</Text>
+          <Text style={styles.sectionTitle}>Missing, pending and rejected indicators</Text>
+        </View>
         <Text style={[styles.paragraph, { marginBottom: 10 }]}>
           Pending values are unverified draft information. Rejected values are excluded from accepted findings. Missing indicators have no supported source value.
         </Text>
         {report.attentionFields.length > 0 ? (
           report.attentionFields.map((field) => (
             <View key={field.id} wrap={false} style={styles.attentionItem}>
-              <Text style={styles.attentionTitle}>{pdfText(field.label)}</Text>
+              <Text style={styles.attentionTitle}>
+                <PdfText value={field.label} />
+              </Text>
               <Text style={styles.attentionReason}>
-                {field.disposition === "rejected"
-                  ? `Rejected - original source value ${pdfText(field.sourceDisplayValue)} is retained for traceability and excluded from accepted findings.`
-                  : field.disposition === "missing"
-                    ? "Not found in the source document."
-                    : `Pending human review - ${pdfText(field.displayValue)}${field.effectiveValue && field.unit ? ` ${pdfText(field.unit)}` : ""} is unverified.`}
+                <PdfText
+                  value={
+                    field.disposition === "rejected"
+                      ? `Rejected - original source value ${field.sourceDisplayValue}${field.sourceValue && field.unit ? ` ${field.unit}` : ""} is retained for traceability and excluded from accepted findings.`
+                      : field.disposition === "missing"
+                        ? "Not found in the source document."
+                        : `Pending human review - ${field.displayValue}${field.effectiveValue && field.unit ? ` ${field.unit}` : ""} is unverified.`
+                  }
+                />
               </Text>
             </View>
           ))
@@ -817,19 +866,27 @@ function BodyPages({ report }: { report: EsgReportSnapshot }) {
         )}
         </View>
 
-        <View wrap={false} style={styles.section}>
-        <Text style={styles.sectionEyebrow}>Important context</Text>
-        <Text style={styles.sectionTitle}>Limitations and disclaimer</Text>
+        <View style={styles.section}>
+        <View minPresenceAhead={100}>
+          <Text style={styles.sectionEyebrow}>Important context</Text>
+          <Text style={styles.sectionTitle}>Limitations and disclaimer</Text>
+        </View>
         {report.limitations.map((limitation) => (
           <Text key={limitation} style={styles.limitationItem}>
-            - {pdfText(limitation)}
+            <PdfText value={`- ${limitation}`} />
           </Text>
         ))}
-        <Text style={styles.finalDisclaimer}>{pdfText(report.disclaimer)}</Text>
+        <Text style={styles.limitationItem}>
+          <PdfText value={`- ${PDF_UNSUPPORTED_TEXT_NOTICE}`} />
+        </Text>
+        <Text wrap={false} style={styles.finalDisclaimer}>
+          <PdfText value={report.disclaimer} />
+        </Text>
         </View>
-      </BodyPage>
-    </>
-  );
+      </View>
+      </>
+    ),
+  });
 }
 
 export function EsgReportPdfDocument({
@@ -846,8 +903,8 @@ export function EsgReportPdfDocument({
       producer="envario"
       language="en"
     >
-      <CoverPage report={report} />
-      <BodyPages report={report} />
+      {CoverPage({ report })}
+      {BodyPages({ report })}
     </Document>
   );
 }

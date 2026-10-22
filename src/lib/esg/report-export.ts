@@ -2,6 +2,19 @@ import type { EsgReportProjection } from "./report";
 
 export type EsgReportSnapshot = EsgReportProjection;
 
+export function formatReportTimestamp(value: string) {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) {
+    throw new Error("A valid report timestamp is required.");
+  }
+
+  return new Intl.DateTimeFormat("en-GB", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Europe/Vienna",
+  }).format(date);
+}
+
 function deepFreeze<T>(value: T): T {
   if (value && typeof value === "object" && !Object.isFrozen(value)) {
     Object.freeze(value);

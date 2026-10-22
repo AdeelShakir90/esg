@@ -4,8 +4,10 @@ import type { EsgReportSnapshot } from "@/lib/esg/report-export";
 import { createEsgReportFileName } from "@/lib/esg/report-export";
 
 import { EsgReportPdfDocument } from "./report-pdf-document";
+import { registerEsgPdfFonts } from "./report-pdf-fonts";
 
 export async function downloadEsgReportPdf(report: EsgReportSnapshot) {
+  registerEsgPdfFonts();
   const blob = await pdf(<EsgReportPdfDocument report={report} />).toBlob();
   const objectUrl = URL.createObjectURL(blob);
   const anchor = document.createElement("a");

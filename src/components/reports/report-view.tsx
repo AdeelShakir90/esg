@@ -30,7 +30,10 @@ import {
   type EsgReportProjection,
   type ReportSection,
 } from "@/lib/esg/report";
-import { createEsgReportSnapshot } from "@/lib/esg/report-export";
+import {
+  createEsgReportSnapshot,
+  formatReportTimestamp,
+} from "@/lib/esg/report-export";
 import type { ValidationData } from "@/lib/esg/validation";
 import { getDemoReviewScope } from "@/lib/esg/validation-review";
 import { cn } from "@/lib/utils";
@@ -97,13 +100,6 @@ const REVIEW_LABELS = {
   rejected: "Rejected",
   edited: "Edited",
 } as const;
-
-function formatTimestamp(value: string) {
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
-}
 
 function StatusView({ state }: { state: Exclude<ViewState, { status: "ready" }> }) {
   const loading = state.status === "loading";
@@ -425,7 +421,9 @@ function ReadyReport({ report }: { report: EsgReportProjection }) {
         </div>
         <div>
           <p className="text-xs font-medium uppercase text-muted-foreground">Generated</p>
-          <p className="mt-1 font-medium text-foreground">{formatTimestamp(report.generatedAt)}</p>
+          <p className="mt-1 font-medium text-foreground">
+            {formatReportTimestamp(report.generatedAt)}
+          </p>
         </div>
         <div>
           <p className="text-xs font-medium uppercase text-muted-foreground">Reporting period</p>
@@ -442,7 +440,9 @@ function ReadyReport({ report }: { report: EsgReportProjection }) {
         </div>
         <div>
           <p className="text-xs font-medium uppercase text-muted-foreground">Extraction completed</p>
-          <p className="mt-1 font-medium text-foreground">{formatTimestamp(report.extraction.completedAt)}</p>
+          <p className="mt-1 font-medium text-foreground">
+            {formatReportTimestamp(report.extraction.completedAt)}
+          </p>
         </div>
         <div className="md:col-span-2">
           <p className="text-xs font-medium uppercase text-muted-foreground">Extraction ID</p>
