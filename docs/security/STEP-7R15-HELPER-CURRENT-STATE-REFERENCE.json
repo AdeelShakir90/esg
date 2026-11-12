@@ -1,0 +1,52 @@
+{
+  "reference_kind": "proposed-observed-current-state-helper-baseline",
+  "source": "User-supplied Step 7R.14 export during Step 7R.15",
+  "project_name": "envario-security-test",
+  "project_ref": "gkhrtrakukqdhgvucudv",
+  "historical_provenance_verified": false,
+  "baseline_approved": false,
+  "migration_execution_approved": false,
+  "source_bytes_verified": false,
+  "transcription_format": "Supplied lines joined by LF, no assumed trailing newline. Original export line endings/trailing bytes are unverified. Reported MD5 values are preserved, not regenerated as approvals.",
+  "helpers": [
+    {
+      "signature": "public.document_storage_organization_id(text)",
+      "definition_text": "CREATE OR REPLACE FUNCTION public.document_storage_organization_id(object_name text)\n RETURNS uuid\n LANGUAGE sql\n IMMUTABLE\n SET search_path TO ''\nAS $function$\n  select case\n    when split_part(object_name, '/', 1) ~\n      '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$'\n    then split_part(object_name, '/', 1)::uuid\n    else null\n  end;\n$function$",
+      "reported_definition_md5": "cdc03d374173e351092dff040c30edf6",
+      "owner": "postgres",
+      "language": "sql",
+      "volatility": "i",
+      "security_definer": false,
+      "search_path": "",
+      "return_type": "uuid",
+      "acl": ["postgres=X/postgres", "authenticated=X/postgres", "service_role=X/postgres"],
+      "effective_execute": { "anon": false, "authenticated": true }
+    },
+    {
+      "signature": "public.has_active_organization_role(uuid,text[])",
+      "definition_text": "CREATE OR REPLACE FUNCTION public.has_active_organization_role(target_organization_id uuid, allowed_roles text[])\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$\n  select exists (\n    select 1\n    from public.organization_memberships membership\n    where membership.organization_id = target_organization_id\n      and membership.user_id = auth.uid()\n      and membership.status = 'active'\n      and membership.role = any(allowed_roles)\n  );\n$function$",
+      "reported_definition_md5": "f1b147b487ffc4b7239b7a65627b5f87",
+      "owner": "postgres",
+      "language": "sql",
+      "volatility": "s",
+      "security_definer": true,
+      "search_path": "",
+      "return_type": "boolean",
+      "acl": ["postgres=X/postgres", "authenticated=X/postgres", "service_role=X/postgres"],
+      "effective_execute": { "anon": false, "authenticated": true }
+    },
+    {
+      "signature": "public.is_active_organization_member(uuid)",
+      "definition_text": "CREATE OR REPLACE FUNCTION public.is_active_organization_member(target_organization_id uuid)\n RETURNS boolean\n LANGUAGE sql\n STABLE SECURITY DEFINER\n SET search_path TO ''\nAS $function$\n  select exists (\n    select 1\n    from public.organization_memberships membership\n    where membership.organization_id = target_organization_id\n      and membership.user_id = auth.uid()\n      and membership.status = 'active'\n  );\n$function$",
+      "reported_definition_md5": "7f7bc2ad759c7dde9b2b68cf03a1af6a",
+      "owner": "postgres",
+      "language": "sql",
+      "volatility": "s",
+      "security_definer": true,
+      "search_path": "",
+      "return_type": "boolean",
+      "acl": ["postgres=X/postgres", "authenticated=X/postgres", "service_role=X/postgres"],
+      "effective_execute": { "anon": false, "authenticated": true }
+    }
+  ]
+}

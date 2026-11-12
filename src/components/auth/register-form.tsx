@@ -2,35 +2,39 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 
 import { ContentCard } from "@/components/primitives/content-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { setRegisteredProfile } from "@/lib/auth-storage";
+import { register } from "@/lib/auth/actions";
 import { design } from "@/lib/design-tokens";
 import { cn } from "@/lib/utils";
 
 export function RegisterForm() {
-  const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     if (!name.trim() || !email.trim() || !password.trim()) {
       setError("Please fill in all fields.");
       return;
     }
-    setRegisteredProfile({
-      name: name.trim(),
-      email: email.trim(),
-    });
-    router.push("/login");
+    setPending(true);
+    setMessage(null);
+    try {
+      const result = await register(name, email, password);
+      setError(result.error ?? null);
+      setMessage(result.message ?? null);
+      setPassword("");
+    } catch { setError("Registration could not be completed. Please try again."); }
+    finally { setPending(false); }
   }
 
   return (
@@ -42,10 +46,11 @@ export function RegisterForm() {
         <div className="text-center">
           <h1 className={design.type.pageTitle}>Create account</h1>
           <p className={cn(design.type.subtitle, "mt-2")}>
-            Static demo — data stays in your browser only.
+            Confirm your email to finish creating your account.
           </p>
         </div>
 
+        {message ? <p role="status">{message}</p> : null}
         <form onSubmit={handleSubmit} className="flex flex-col gap-5">
           <div className="flex flex-col gap-2">
             <Label htmlFor="register-name">Name</Label>
@@ -73,6 +78,7 @@ export function RegisterForm() {
             <Input
               id="register-password"
               type="password"
+              minLength={8}
               autoComplete="new-password"
               placeholder="••••••••"
               value={password}
@@ -84,8 +90,8 @@ export function RegisterForm() {
               {error}
             </p>
           ) : null}
-          <Button type="submit" size="lg" className="mt-1 w-full shadow-premium">
-            Register
+          <Button type="submit" disabled={pending} size="lg" className="mt-1 w-full shadow-premium">
+            {pending ? "Registering…" : "Register"}
           </Button>
         </form>
 

@@ -1,0 +1,46 @@
+# Security checkpoint and proposed commit
+
+## Completed evidence
+
+- SSR Auth and the request-scoped authorization adapter are implemented locally. The offline contract covers owner/reviewer authorization, member and suspended denial, verified organization selection, foreign/unowned document handling and disabled writes.
+- The isolated database review includes the R17 exact helper bytes and metadata, reviewed current-state policy snapshots, the targeted read migration and its postflight. The reviewed migration SHA-256 is `B435B165A360C8CAED32B74794A6FBCA3BBAE29C1702F0B183462DDCF31A4087`.
+- Six distinct Auth personas and their expected membership assignments verified. A1, B1 and U1 passed the fixture checks at `3 / 3 / 3 / 3`, and the setup operator verified all three PDF downloads.
+- All six genuine user-session read runs and the anonymous control completed. The live tests cover exact document and descendant visibility, organization and self-only membership visibility, cross-tenant isolation and U1 denial through direct PostgREST and Storage list/download calls. [Live read evidence](C:/Users/adeel/esg/docs/security/RLS-SYNTHETIC-LIVE-READ-REVIEW.md)
+
+## Retained findings
+
+The original postflight CSV records **96 PASS, 3 FAIL and 6 REVIEW**. The live read matrix is separate evidence. No comparator, expected predicate or approval flag is changed by this checkpoint.
+
+| Finding | Retained status | Review disposition |
+| --- | --- | --- |
+| Exact USING comparisons for documents, membership and Storage | Three FAIL | The independently verified and accepted semantic report explains the deparser's extra right-hand AND grouping and whitespace. Storage CASE, guarded casts, exact metadata matching and role restrictions were preserved. Keep the exact results as evidence. |
+| Storage privilege snapshot | REVIEW | The exact snapshot is preserved as PROPOSED. Explicit acceptance of that reference remains separate. |
+| Effective Storage MAINTAIN for anon and authenticated | Two REVIEW | Postflight reported false for MAINTAIN and its grant option. The pre-migration export omitted these rights, so unchanged MAINTAIN remains unproven. Record that limitation explicitly if historical evidence is unavailable. |
+| Full role membership graph | REVIEW | Effective rights, owner and bypass checks cover parts of the graph. Full pre/post role topology and SET ROLE paths remain unbaselined. |
+| Execution checkpoint and project/reference scope | Two REVIEW | Manual evidence and approval records remain separate from automatic comparison. Neither row grants app enablement or production approval. |
+
+## Application enablement gates
+
+**Reads.** Keep `DATABASE_READS_VERIFIED = false` and retain the holding screen for this checkpoint. Before approving a read gate change, review fresh target policy, helper, grants and role drift, the open Storage baseline and graph limitations, and any exposed views/RPCs. Complete the planned exact-path negative fixtures for malformed or legacy paths, wrong document ID, wrong organization, mismatched document path and orphaned metadata. The live U1 test establishes NULL ownership denial on the tested object. It leaves those other conditions for their own evidence. Any supplemental fixture work requires explicit scope and cleanup review.
+
+Review application-level integration separately. Exercise verified SSR identity, organization selection, private/no-store responses, stale scope/cache clearing after identity or organization changes, API/action 401/403/404 behavior and parent-document linkage using a controlled isolated harness. Direct PostgREST and Storage success does not exercise the workspace, report or validation route. Review how to stage an isolated gate change and rollback, then request separate approval for the target and exact change. Production would need its own target verification and deployment decision.
+
+**Writes.** Keep the existing 503 gates. Inventory all effective table, column, function and Storage write permissions and relevant INSERT/UPDATE/DELETE/ALL policies, plus write-capable RPCs or privileged paths. The completed SELECT tests leave managed Storage write authorization untested. Review the owner-only upload/processing contract and a fail-closed document/object creation and cleanup sequence. Require separately approved tests for reviewer, member, suspended, outsider, anonymous and cross-tenant denials, attempted role/ownership reassignment, wrong paths, duplicate or partial upload recovery, validation writes and preservation of the ESG flow. If signed URLs are introduced, review their minting and revocation behavior separately. No write approval follows from this read checkpoint.
+
+## Proposed commit boundary
+
+Git preparation leaves branch `mvp-v0.3-esg-extraction` at `ae8952a` with an empty index. The working tree mixes application code, migrations, test tools and evidence. The explicit allowlist names **113 candidate files**. [Proposed staging paths](C:/Users/adeel/esg/docs/security/SECURITY-CHECKPOINT-FILES.txt)
+
+1. **Application checkpoint candidates.** Review the tracked `package.json`, `package-lock.json` and `src/` diffs as one dependency group. Candidate additions are `src/app/auth/confirm/route.ts`, the two new components under `src/components/auth/`, `src/lib/auth/`, `src/lib/security/`, the three new Supabase SSR/public config files under `src/lib/supabase/`, and `src/proxy.ts`. Review each file before adding it. Preserve the false read gate and disabled writes. Keep credentials and environment files outside the index.
+2. **SQL and tests.** The reviewed combined migration remains byte-identical at `supabase/migrations/20261109010000_authenticated_read_reconciliation.sql`. The superseded `20261109000000` draft moved byte-for-byte to `docs/security/archived-migrations/20261109000000_reconcile_protected_read_roles.sql.txt`. Its contract test now reads the archive. The Git attributes preserve fingerprinted SQL bytes and give the other security documentation a consistent LF checkout. The clean-snapshot tests use the reviewed SQL, Markdown and JSON references on the allowlist. Raw byte integrity and exact live evidence checks moved to explicit private audits and still pass locally. Record migration history reconciliation before any future deployment of the combined migration to a target where it was manually applied.
+3. **Sanitized evidence and tooling.** The candidate list includes read authorization notes, the semantic review and these live results. The operator SQL templates retain NULL inputs and default-false confirmation flags. The live read and upload tools are included with their reviewed target guard and offline mock tests. The only candidate under `output/` is the synthetic 1,638-byte PDF used by the intercepted download test.
+4. **Exclude private and temporary files.** Keep `.env*` credential files, populated manifests and SQL, Auth credentials, private UUID mappings, receipt logs, screenshots, terminal captures and temporary outputs out of Git. Exclude all raw CSV and `.raw` exports, including the helper, Storage, schema, postflight and predicate diagnostic exports. Review JSON and Markdown separately since extensions alone do not establish safety. Keep legacy disabled route snapshots out of the initial application commit unless their archival purpose and content are separately approved.
+5. **Review the proposed index before committing.** Inspect the allowlisted paths and staged diff, run `git diff --cached --check`, and scan staged content for credentials and private manifest values without displaying matches. Check the proposed snapshot's offline Auth, security, ESG and intercepted request tests and TypeScript/lint. Record any build limitation and confirm the gate is false. Suggested commit subject is `Add gated Supabase authentication and organization read authorization`. Present the staged path list and test results for approval before creating the commit. Push and deployment are separate decisions.
+
+## Preparation verification and next approval
+
+The clean source snapshot used `git archive HEAD` plus only the 113 allowlisted files. It contained no environment files, CSVs, raw exports or private audit scripts. It resolved dependencies from the already installed workspace modules. No dependency reinstall or build was run. The snapshot passed 233 security, 34 Auth, 81 ESG and 44 portable artifact/runner tests, plus TypeScript no-emit. The seven separate private audits passed locally, including the original `96 PASS / 3 FAIL / 6 REVIEW` result inventory.
+
+Candidate content checks found no credential-pattern matches or populated operator UUID parameters. UUID literals reviewed in the candidates are fixture IDs, parser probes and offline mock identifiers. The path allowlist excludes raw evidence, private audit scripts, legacy snapshots and temporary work. The local ignore rules cover raw exports, private audit scripts and the designated private and temporary directories.
+
+The next approval is to stage only the paths in `SECURITY-CHECKPOINT-FILES.txt` and review the index. Use literal pathspecs and compare the staged names against the allowlist before proposing a commit. The index remains empty. The three FAILs, six REVIEWs and application gate remain intact.

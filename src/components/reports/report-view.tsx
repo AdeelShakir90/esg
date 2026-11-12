@@ -56,6 +56,8 @@ const ERROR_CONTENT: Record<
   ValidationLoadErrorCode | "invalid_projection",
   { title: string; message: string }
 > = {
+  forbidden: { title: "Access denied", message: "An active owner or reviewer membership is required." },
+  reads_disabled: { title: "Access temporarily disabled", message: "Organization security verification is pending." },
   invalid_document_id: {
     title: "Invalid document link",
     message: "Choose a document with completed ESG extraction from Documents.",

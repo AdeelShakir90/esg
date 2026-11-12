@@ -1,34 +1,30 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { Bell, LogOut, Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  clearStoredUser,
-  getStoredUserEmail,
   getUserInitials,
 } from "@/lib/auth-storage";
+import { logout as signOut, verifiedProfile } from "@/lib/auth/actions";
 import { design } from "@/lib/design-tokens";
 
 /**
  * Dashboard top toolbar: search, notifications, profile, logout (static demo).
  */
 export function DashboardHeader() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
 
   useEffect(() => {
-    setEmail(getStoredUserEmail() || "");
+    void verifiedProfile().then((profile) => setEmail(profile?.email ?? "")).catch(() => setEmail(""));
   }, []);
 
   const initials = email ? getUserInitials(email) : "U";
 
-  function logout() {
-    clearStoredUser();
-    router.push("/login");
+  async function logout() {
+    await signOut();
   }
 
   return (

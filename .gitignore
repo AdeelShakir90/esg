@@ -39,3 +39,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Local security evidence and populated operator inputs
+/docs/Supabase Snippet Untitled query.csv
+/docs/security/**/*.csv
+/docs/security/**/*.raw
+/docs/security/*.private-audit.mjs
+/docs/security/private/
+/tmp/

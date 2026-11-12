@@ -2,30 +2,27 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 
 import { ContentCard } from "@/components/primitives/content-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { setStoredUser } from "@/lib/auth-storage";
+import { login } from "@/lib/auth/actions";
+import { safeAuthRedirect } from "@/lib/auth/policy";
 import { design } from "@/lib/design-tokens";
 import { cn } from "@/lib/utils";
 
 export function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const nextRaw = searchParams.get("next") || "/dashboard";
-  const nextHref =
-    nextRaw.startsWith("/") && !nextRaw.startsWith("//") && !nextRaw.includes("?")
-      ? nextRaw
-      : "/dashboard";
+  const nextHref = safeAuthRedirect(searchParams.get("next"));
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     const em = email.trim();
@@ -33,8 +30,10 @@ export function LoginForm() {
       setError("Please enter your email and password.");
       return;
     }
-    setStoredUser(em);
-    router.push(nextHref);
+    setPending(true);
+    try { const result = await login(em, password, nextHref); setError(result.error); }
+    catch { setError("Sign-in could not be completed. Please try again."); }
+    finally { setPending(false); }
   }
 
   return (
@@ -46,10 +45,11 @@ export function LoginForm() {
         <div className="text-center">
           <h1 className={design.type.pageTitle}>Sign in</h1>
           <p className={cn(design.type.subtitle, "mt-2")}>
-            Demo only — credentials are not sent anywhere.
+            Sign in with your confirmed account.
           </p>
         </div>
 
+        {searchParams.get("confirmation") === "failed" ? <p role="alert">Email confirmation failed or expired. Please try your confirmation link again.</p> : null}
         <form onSubmit={handleSubmit} className="flex flex-col gap-5">
           <div className="flex flex-col gap-2">
             <Label htmlFor="login-email">Email</Label>
@@ -78,8 +78,8 @@ export function LoginForm() {
               {error}
             </p>
           ) : null}
-          <Button type="submit" size="lg" className="mt-1 w-full shadow-premium">
-            Log in
+          <Button type="submit" disabled={pending} size="lg" className="mt-1 w-full shadow-premium">
+            {pending ? "Signing in…" : "Log in"}
           </Button>
         </form>
 

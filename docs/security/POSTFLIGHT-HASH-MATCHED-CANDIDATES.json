@@ -1,0 +1,20 @@
+{
+  "kind": "local-diagnostic-reconstruction-only",
+  "baseline_approved": false,
+  "comparator_change_approved": false,
+  "migration_execution_approved": false,
+  "candidates": [
+    {
+      "policy_name": "documents_select_active_member",
+      "locally_reconstructed_using": "((organization_id IS NOT NULL) AND public.is_active_organization_member(organization_id) AND ((organization_id IS NOT NULL) AND public.has_active_organization_role(organization_id, ARRAY['owner'::text, 'reviewer'::text])))",
+      "reported_actual_md5": "41a0c328d5f4283bbb3097581a8fbaa0",
+      "full_live_text_verified": false
+    },
+    {
+      "policy_name": "memberships_select_same_organization",
+      "locally_reconstructed_using": "(((user_id = auth.uid()) OR public.has_active_organization_role(organization_id, ARRAY['owner'::text, 'admin'::text])) AND ((user_id = auth.uid()) AND (status = 'active'::text) AND (role = ANY (ARRAY['owner'::text, 'reviewer'::text]))))",
+      "reported_actual_md5": "f5d32ebd3eacf67f3ccf686202340990",
+      "full_live_text_verified": false
+    }
+  ]
+}

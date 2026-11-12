@@ -1,35 +1,20 @@
-"use client";
+import { redirect } from "next/navigation";
+import { getVerifiedUser } from "@/lib/supabase/server";
+import { SignOutButton } from "./sign-out-button";
+import { ReadScopeBoundary } from "./read-scope-boundary";
 
-import { useEffect, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
-import { getStoredUserEmail } from "@/lib/auth-storage";
-import { AppLoadingSkeleton } from "@/components/layout/app-loading-skeleton";
-
-/**
- * Static-site guard: redirects to /login when no user is stored in localStorage.
- */
-export function AuthGate({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const [status, setStatus] = useState<"checking" | "ok">("checking");
-
-  useEffect(() => {
-    const email = getStoredUserEmail();
-    if (!email) {
-      const next = encodeURIComponent(pathname || "/dashboard");
-      router.replace(`/login?next=${next}`);
-      return;
-    }
-    setStatus("ok");
-  }, [router, pathname]);
-
-  if (status !== "ok") {
-    return (
-      <div className="min-h-screen" aria-busy="true" aria-label="Loading workspace">
-        <AppLoadingSkeleton />
-      </div>
-    );
-  }
-
-  return <>{children}</>;
+/** UX/session boundary only. Existing APIs/actions are NOT secured by this gate. */
+export async function AuthGate() {
+  const user = await getVerifiedUser();
+  if (!user) redirect("/login");
+  // Do not render workspace children until API authorization exists.
+  return (
+    <ReadScopeBoundary key={user.id} userId={user.id}>
+    <main className="mx-auto max-w-xl space-y-4 p-8">
+      <h1 className="text-2xl font-semibold">Signed in</h1>
+      <p>Workspace access is temporarily unavailable while organization security is completed.</p>
+      <SignOutButton />
+    </main>
+    </ReadScopeBoundary>
+  );
 }

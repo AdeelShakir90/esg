@@ -1,1 +1,8 @@
 src/app/(authenticated)/validation/page.tsx whitespace=cr-at-eol
+
+# These reviewed SQL bytes are fingerprinted, including original line endings.
+docs/security/** text eol=lf
+supabase/migrations/20261109010000_authenticated_read_reconciliation.sql -text !eol
+docs/security/archived-migrations/20261109000000_reconcile_protected_read_roles.sql.txt -text !eol
+docs/security/STEP-7R17-VERIFIED-CURRENT-STATE/*.sql -text !eol
+output/pdf/envario-rls-synthetic.pdf binary

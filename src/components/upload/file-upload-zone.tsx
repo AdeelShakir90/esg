@@ -322,7 +322,7 @@ export function FileUploadZone() {
     try {
       result = await triggerEsgExtraction(documentId);
     } catch {
-      result = { success: false };
+      result = { success: false, code: "writes_disabled", status: 503 };
     } finally {
       esgExtractionInFlight.current.delete(documentId);
     }

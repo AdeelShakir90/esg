@@ -66,6 +66,8 @@ const ERROR_MESSAGES: Record<
   ValidationLoadErrorCode | "missing_document_id",
   { title: string; message: string }
 > = {
+  forbidden: { title: "Access denied", message: "An active owner or reviewer membership is required." },
+  reads_disabled: { title: "Access temporarily disabled", message: "Organization security verification is pending." },
   missing_document_id: {
     title: "Choose a document to validate",
     message:

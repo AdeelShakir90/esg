@@ -1,0 +1,3 @@
+-- SUPERSEDED: non-executable pointer only. Do not use as a postflight.
+-- One canonical script: docs/security/STEP-7R8-POSTFLIGHT.sql
+-- Original snapshot/source bytes remain preserved alongside this pointer.
